@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import { wsManager } from "$lib/websocket.js";
   import ThemeToggle from "$lib/ThemeToggle.svelte";
   import { fly } from "svelte/transition";
@@ -286,14 +287,14 @@
 
   export const getNameMood = (clientId) => {
     if (!clientId) return "Unknown";
-    
+
     // Use clientId to generate consistent random names
     const hash1 = parseInt(clientId.substring(0, 4), 36);
     const hash2 = parseInt(clientId.substring(4, 8), 36);
-    
+
     const moodIndex = hash1 % namesStructure.namesMoods.length;
     const animalIndex = hash2 % namesStructure.namesAnimals.length;
-    
+
     return `${namesStructure.namesMoods[moodIndex]} ${namesStructure.namesAnimals[animalIndex]}`;
   };
 
@@ -325,7 +326,9 @@
       if (data.typing) {
         typingUsers = new Set([...typingUsers, data.clientId]);
       } else {
-        typingUsers = new Set([...typingUsers].filter(id => id !== data.clientId));
+        typingUsers = new Set(
+          [...typingUsers].filter((id) => id !== data.clientId),
+        );
       }
     });
 
@@ -341,7 +344,7 @@
     // Start typing indicator if message is not empty
     if (newMessage.trim()) {
       wsManager.startTyping();
-      
+
       // Set timeout to stop typing after 3 seconds of inactivity
       typingTimeout = setTimeout(() => {
         wsManager.stopTyping();
@@ -419,18 +422,20 @@
   function shareViaSMS() {
     const currentUrl = window.location.href;
     const message = `Go Freessenger @ ${currentUrl}`;
-    
+
     // Check if Web Share API is available
     if (navigator.share) {
-      navigator.share({
-        title: 'Freessenger Chat Room',
-        text: message,
-        url: currentUrl
-      }).catch(err => {
-        console.log('Share cancelled or failed:', err);
-        // Fallback to SMS
-        openSMSLink(message);
-      });
+      navigator
+        .share({
+          title: "Freessenger Chat Room",
+          text: message,
+          url: currentUrl,
+        })
+        .catch((err) => {
+          console.log("Share cancelled or failed:", err);
+          // Fallback to SMS
+          openSMSLink(message);
+        });
     } else {
       // Fallback for browsers that don't support Web Share API
       openSMSLink(message);
@@ -440,33 +445,40 @@
   function openSMSLink(message) {
     // Create SMS link with URL encoding
     const smsUrl = `sms:?body=${encodeURIComponent(message)}`;
-    window.open(smsUrl, '_blank');
+    window.open(smsUrl, "_blank");
   }
 
   function formatTime(timestamp) {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('ru-RU', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false 
+    return date.toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     });
+  }
+
+  function goHome() {
+    goto('/');
   }
 </script>
 
 <div class="chat-container">
   <div class="chat-header">
-    <h2>Room: {roomHash}</h2>
-    <div class="header-info">
-      <span class="participant-count"
-        >{participantCount} participant{participantCount !== 1 ? "s" : ""}</span
-      >
-      <button class="copy-btn" class:copied={copySuccess} on:click={copyRoomHash}>
-        {copySuccess ? "Copied!" : "Copy Hash"}
+    <div class="row">
+      <button class="app-title" on:click={goHome} aria-label="Go to home page">
+        <span class="free">FREE</span>SSENGER
       </button>
-      <button class="share-btn" on:click={shareViaSMS}>
-        Share
-      </button>
-      <ThemeToggle />
+      <div class="header-info">
+        <span class="participant-count">{participantCount} online</span>
+        <!-- button class="copy-btn" class:copied={copySuccess} on:click={copyRoomHash}>
+        {copySuccess ? "Copied!" : "Copy"}
+      </button -->
+        <button class="share-btn" on:click={shareViaSMS}> Share </button>
+        <ThemeToggle />
+      </div>
+    </div>
+    <div class="row">
+      <h2>Room: {roomHash}</h2>
     </div>
   </div>
 
@@ -485,7 +497,7 @@
         </div>
       </div>
     {/each}
-    
+
     <!-- Typing indicator -->
     {#each Array.from(typingUsers) as clientId (clientId)}
       <div class="typing-indicator" transition:fly={{ y: -10, duration: 200 }}>
@@ -508,8 +520,21 @@
       maxlength="2000"
       rows="1"
     ></textarea>
-    <button class="send-btn" on:click={sendMessage} disabled={!newMessage.trim()}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <button
+      class="send-btn"
+      on:click={sendMessage}
+      disabled={!newMessage.trim()}
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
         <line x1="22" y1="2" x2="11" y2="13"></line>
         <polygon points="22 2 15 22 11 13 2 9"></polygon>
       </svg>
@@ -520,13 +545,6 @@
 <style>
   * {
     box-sizing: border-box;
-  }
-
-  html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .chat-container {
@@ -540,20 +558,54 @@
   }
 
   .chat-header {
-    padding: 20px;
+    padding: 10px 10px 0 20px;
     background-color: #f8f9fa;
     border-bottom: 1px solid #dee2e6;
     display: flex;
+    flex-direction: column;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-end;
     flex-shrink: 0;
+  }
+  
+  .chat-header .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .app-title {
+    font-family: "Oswald", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 22px;
+    font-weight: bold;
+    color: #333;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+  }
+
+  .app-title:hover {
+    opacity: 0.8;
+  }
+
+  .free {
+    color: #ff0000;
+    font-weight: bold;
   }
 
   .chat-header h2 {
     margin: 0;
-    color: #333;
+    color: #ddd;
     font-size: 8px;
-    font-weight: normal;
+    line-height: 10px;
+    font-weight: 100;
     word-break: break-all;
     flex-shrink: 0;
   }
@@ -570,7 +622,7 @@
   }
 
   .copy-btn {
-    background-color: #28a745;
+    background-color: #17a2b8;
     color: white;
     border: none;
     padding: 6px 12px;
@@ -726,7 +778,9 @@
   }
 
   @keyframes typing {
-    0%, 60%, 100% {
+    0%,
+    60%,
+    100% {
       transform: translateY(0);
       opacity: 0.7;
     }
@@ -771,7 +825,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: auto;
     height: 100%;
     aspect-ratio: 1 / 1;
   }
@@ -788,7 +841,6 @@
   @media (max-width: 768px) {
     .chat-header {
       flex-direction: column;
-      gap: 10px;
       text-align: center;
     }
 
@@ -824,8 +876,12 @@
     border-bottom: 1px solid #555;
   }
 
-  :global(body.dark) .chat-header h2 {
+  :global(body.dark) .app-title {
     color: #f0f0f0;
+  }
+
+  :global(body.dark) .chat-header h2 {
+    color: #666;
   }
 
   :global(body.dark) .messages-container {
@@ -886,20 +942,6 @@
   :global(body.dark) .send-btn:disabled {
     background-color: #555;
     color: #999;
-  }
-
-  :global(body.dark) .copy-btn {
-    background-color: #404040;
-    color: #e0e0e0;
-    border: 1px solid #555;
-  }
-
-  :global(body.dark) .copy-btn:hover {
-    background-color: #555;
-  }
-
-  :global(body.dark) .copy-btn:active {
-    background-color: #1e7e34;
   }
 
   :global(body.dark) .share-btn {

@@ -24,6 +24,8 @@
     border-radius: 50%;
     transition: background-color 0.2s;
     color: inherit;
+    height: 100%;
+    aspect-ratio: 1 / 1;
   }
 
   .theme-toggle:hover {

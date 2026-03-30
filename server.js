@@ -202,9 +202,10 @@ function broadcastToRoom(roomHash, data, excludeWs = null) {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/dist/index.html'));
 });
+                      
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`WebSocket server running on ws://0.0.0.0:8080`);
+    console.log(`Access from other devices: http://YOUR_IP:${PORT}`);
+  });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
-  console.log(`WebSocket server running on ws://0.0.0.0:8080`);
-  console.log(`Access from other devices: http://YOUR_IP:${PORT}`);
-});
