@@ -12,7 +12,7 @@ class WebSocketManager {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8080`;
+    const wsUrl = `${protocol}//${window.location.host}`;
     
     this.ws = new WebSocket(wsUrl);
 

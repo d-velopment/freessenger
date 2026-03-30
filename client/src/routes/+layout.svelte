@@ -13,6 +13,10 @@
   }
 </script>
 
+<svelte:head>
+  <title>FREESSENGER.COM</title>
+</svelte:head>
+
 <slot />
 
 <style>

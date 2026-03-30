@@ -1,7 +1,9 @@
+require('dotenv').config();
 const WebSocket = require('ws');
 const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,8 +11,9 @@ const PORT = process.env.PORT || 3000;
 // Serve static files from client directory
 app.use(express.static(path.join(__dirname, 'client/dist')));
 
-// WebSocket server
-const wss = new WebSocket.Server({ port: 8080, host: '0.0.0.0' });
+// Create HTTP server and WebSocket server
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
 // Store rooms and their participants
 const rooms = new Map();
@@ -41,7 +44,7 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      
+
       switch (data.type) {
         case 'join':
           if (data.roomHash && isValidHash(data.roomHash)) {
@@ -87,7 +90,7 @@ wss.on('connection', (ws) => {
           if (currentRoom && data.message && typeof data.message === 'string') {
             // Limit message to 2000 characters
             const trimmedMessage = data.message.substring(0, 2000);
-            
+
             // Broadcast message to all participants in the room except sender
             broadcastToRoom(currentRoom, {
               type: 'message',
@@ -112,7 +115,7 @@ wss.on('connection', (ws) => {
               typingUsers.set(currentRoom, new Set());
             }
             typingUsers.get(currentRoom).add(clientId);
-            
+
             // Broadcast typing indicator to others
             broadcastToRoom(currentRoom, {
               type: 'user_typing',
@@ -127,14 +130,14 @@ wss.on('connection', (ws) => {
             const roomTypingUsers = typingUsers.get(currentRoom);
             if (roomTypingUsers) {
               roomTypingUsers.delete(clientId);
-              
+
               // Broadcast stop typing to others
               broadcastToRoom(currentRoom, {
                 type: 'user_typing',
                 clientId: clientId,
                 typing: false
               }, ws);
-              
+
               // Clean up empty typing sets
               if (roomTypingUsers.size === 0) {
                 typingUsers.delete(currentRoom);
@@ -169,14 +172,14 @@ wss.on('connection', (ws) => {
       const roomTypingUsers = typingUsers.get(currentRoom);
       if (roomTypingUsers && clientId) {
         roomTypingUsers.delete(clientId);
-        
+
         // Notify others that this user stopped typing
         broadcastToRoom(currentRoom, {
           type: 'user_typing',
           clientId: clientId,
           typing: false
         });
-        
+
         // Clean up empty typing sets
         if (roomTypingUsers.size === 0) {
           typingUsers.delete(currentRoom);
@@ -202,10 +205,10 @@ function broadcastToRoom(roomHash, data, excludeWs = null) {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/dist/index.html'));
 });
-                      
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-    console.log(`WebSocket server running on ws://0.0.0.0:8080`);
-    console.log(`Access from other devices: http://YOUR_IP:${PORT}`);
-  });
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
+  console.log(`WebSocket server running on same port`);
+  console.log(`Access from other devices: http://YOUR_IP:${PORT}`);
+});
 

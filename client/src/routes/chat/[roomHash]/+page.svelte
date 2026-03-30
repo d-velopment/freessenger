@@ -473,7 +473,15 @@
         <!-- button class="copy-btn" class:copied={copySuccess} on:click={copyRoomHash}>
         {copySuccess ? "Copied!" : "Copy"}
       </button -->
-        <button class="share-btn" on:click={shareViaSMS}> Share </button>
+        <button class="share-btn" on:click={shareViaSMS}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <line x1="19" y1="10" x2="19" y2="16"></line>
+            <line x1="16" y1="13" x2="22" y2="13"></line>
+          </svg>
+          Invite
+        </button>
         <ThemeToggle />
       </div>
     </div>
@@ -555,6 +563,7 @@
     margin: 0 auto;
     font-family: Arial, sans-serif;
     overflow-x: hidden;
+    border-radius: 22px;
   }
 
   .chat-header {
@@ -621,25 +630,6 @@
     font-size: 14px;
   }
 
-  .copy-btn {
-    background-color: #17a2b8;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background-color 0.2s;
-  }
-
-  .copy-btn:hover {
-    background-color: #218838;
-  }
-
-  .copy-btn:active {
-    background-color: #1e7e34;
-  }
-
   .share-btn {
     background-color: #17a2b8;
     color: white;
@@ -649,6 +639,14 @@
     cursor: pointer;
     font-size: 12px;
     transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .share-btn svg {
+    width: 14px;
+    height: 14px;
   }
 
   .share-btn:hover {
@@ -791,11 +789,10 @@
   }
 
   .message-input {
-    padding: 20px;
+    padding: 7px;
     background-color: #f8f9fa;
     border-top: 1px solid #dee2e6;
     display: flex;
-    gap: 10px;
     align-items: flex-end;
     justify-content: center;
     flex-shrink: 0;
@@ -804,7 +801,7 @@
   .message-input textarea {
     flex: 1;
     border: 1px solid #ccc;
-    border-radius: 8px;
+    border-radius: 20px;
     padding: 12px;
     font-size: 14px;
     font-family: inherit;

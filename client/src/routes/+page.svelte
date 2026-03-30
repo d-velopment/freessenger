@@ -1,9 +1,9 @@
 <script>
-  import { goto } from '$app/navigation';
-  import { wsManager } from '$lib/websocket.js';
-  import ThemeToggle from '$lib/ThemeToggle.svelte';
+  import { goto } from "$app/navigation";
+  import { wsManager } from "$lib/websocket.js";
+  import ThemeToggle from "$lib/ThemeToggle.svelte";
 
-  let roomHash = '';
+  let roomHash = "";
   let creatingRoom = false;
 
   function joinRoom() {
@@ -14,14 +14,14 @@
 
   function createNewRoom() {
     creatingRoom = true;
-    wsManager.on('room_created', (data) => {
+    wsManager.on("room_created", (data) => {
       goto(`/chat/${data.roomHash}`);
     });
     wsManager.createRoom();
   }
 
   function handleKeyPress(event) {
-    if (event.key === 'Enter') {
+    if (event.key === "Enter") {
       joinRoom();
     }
   }
@@ -29,14 +29,30 @@
 
 <div class="container">
   <div class="header">
-    <h1>Freessenger</h1>
+    <h1><span class="free">FREE</span>SSENGER
+      <span class="tagline">- a messenger <span class="free">free</span> from registration</span></h1>
+    
     <ThemeToggle />
   </div>
-  <p>Simple WebSocket messenger</p>
-  
+
+  <div class="intro">
+    <div class="info">
+      <p>No registration • No messages storage • Rooms are unique</p>
+    </div>
+  </div>
+
   <div class="actions">
+    <div class="create-section">
+      <h2><span class="free">CREATE</span>ROOM</h2>
+      <button on:click={createNewRoom} disabled={creatingRoom}>
+        {creatingRoom ? "Creating..." : "Create New Room"}
+      </button>
+    </div>
+
+    <div class="or">OR</div>
+
     <div class="join-section">
-      <h2>Join Chat</h2>
+      <h2><span class="free">JOIN</span>ROOM</h2>
       <input
         type="text"
         bind:value={roomHash}
@@ -46,15 +62,6 @@
       />
       <button on:click={joinRoom} disabled={!roomHash.trim()}>
         Join Room
-      </button>
-    </div>
-
-    <div class="or">OR</div>
-
-    <div class="create-section">
-      <h2>Create New Chat</h2>
-      <button on:click={createNewRoom} disabled={creatingRoom}>
-        {creatingRoom ? 'Creating...' : 'Create New Room'}
       </button>
     </div>
   </div>
@@ -67,18 +74,55 @@
     padding: 20px;
     text-align: center;
     font-family: Arial, sans-serif;
+    border-radius: 20px;
   }
 
   .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
   }
 
   h1 {
     color: #333;
     margin-bottom: 10px;
+    font-family: "Oswald", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: left;
+  }
+
+  .free {
+    color: #ff0000;
+  }
+
+  .tagline {
+    color: #666;
+    font-family: "Kaushan Script", cursive;
+  }
+
+  .intro {
+    display: flex;
+    flex-direction: column;
+    
+    padding: 10px 0 20px;
+    border-top: 1px solid #ddd;
+  }
+
+  .info {
+    padding: 15px;
+    background-color: #d9e0f6;
+    border-radius: 8px;
+    margin-top: 10px;
+  }
+
+  .info p {
+    margin: 0;
+    font-size: 14px;
+    color: #555;
   }
 
   p {
@@ -89,10 +133,11 @@
   .actions {
     display: flex;
     flex-direction: column;
-    gap: 30px;
+    gap: 10px;
   }
 
-  .join-section, .create-section {
+  .join-section,
+  .create-section {
     padding: 20px;
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -106,7 +151,7 @@
   input {
     width: 100%;
     padding: 12px;
-    margin: 10px 0;
+    margin-bottom: 20px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 14px;
@@ -121,7 +166,6 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 16px;
-    margin-top: 10px;
   }
 
   button:hover:not(:disabled) {
@@ -136,10 +180,9 @@
   h2 {
     margin-top: 0;
     color: #333;
-  }
-
-  h2:hover {
-    transform: translateY(-1px);
+    font-family: "Oswald", sans-serif;
+    font-weight: bold;
+    font-size: 22px;
   }
 
   /* Dark theme styles */
@@ -184,5 +227,13 @@
   :global(body.dark) button:disabled {
     background-color: #555;
     color: #999;
+  }
+
+  :global(body.dark) .info {
+    background-color: #00596c;
+  }
+
+  :global(body.dark) .info p {
+    color: #b0b0b0;
   }
 </style>
