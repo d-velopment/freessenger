@@ -1,0 +1,16 @@
+# Enable Node.js application for cPanel
+Options -Indexes
+
+# Set the default file to serve
+DirectoryIndex app.js
+
+# Enable rewrite engine for SPA
+RewriteEngine On
+
+# Redirect all requests to the Node.js app
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ app.js [QSA,L]
+
+# Set environment variables
+SetEnv NODE_ENV production
