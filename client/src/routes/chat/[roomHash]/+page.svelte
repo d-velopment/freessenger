@@ -302,6 +302,52 @@
     return `${namesStructure.namesMoods[moodIndex]} ${namesStructure.namesAnimals[animalIndex]}`;
   };
 
+  function getColorFromClientId(clientId) {
+    if (!clientId) return '#f1f3f4';
+
+    // Generate hue from clientId (0-360, but skip blue range 200-240)
+    const hash = parseInt(clientId.substring(0, 8), 36);
+    let hue = (hash % 360);
+    
+    // Avoid blue hues (roughly 200-240 degrees)
+    if (hue >= 200 && hue <= 240) {
+      hue = ((hue + 120) % 360);
+    }
+
+    // Pastel colors: low saturation (25-35%), high value (88-93%)
+    const saturation = 25 + (hash % 11); // 25-35%
+    const value = 38 + ((hash >> 8) % 6); // 88-93%
+
+    // Convert HSV to RGB
+    const s = saturation / 100;
+    const v = value / 100;
+    const c = v * s;
+    const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+    const m = v - c;
+
+    let r, g, b;
+    if (hue < 60) {
+      [r, g, b] = [c, x, 0];
+    } else if (hue < 120) {
+      [r, g, b] = [x, c, 0];
+    } else if (hue < 180) {
+      [r, g, b] = [0, c, x];
+    } else if (hue < 240) {
+      [r, g, b] = [0, x, c];
+    } else if (hue < 300) {
+      [r, g, b] = [x, 0, c];
+    } else {
+      [r, g, b] = [c, 0, x];
+    }
+
+    const toHex = (val) => {
+      const hex = Math.round((val + m) * 255).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+
   onMount(() => {
     // Get our client ID from WebSocket manager
     myClientId = wsManager.clientId;
@@ -518,6 +564,7 @@
         class="message"
         class:own-message={message.isOwn}
         class:other-message={!message.isOwn}
+        style:background-color={!message.isOwn ? getColorFromClientId(message.clientId) : undefined}
         transition:fly={{ y: message.isOwn ? 20 : -20, duration: 300 }}
       >
         <div class="message-author">{getNameMood(message.clientId)}</div>
@@ -719,7 +766,7 @@
     font-size: 0.8125rem;
     font-weight: 300;
     margin-bottom: 2px;
-    opacity: 0.7;
+    opacity: 0.3;
   }
 
   .message-body {
@@ -740,7 +787,7 @@
   .message-time {
     font-size: 0.8125rem;
     font-weight: 300;
-    opacity: 0.7;
+    opacity: 0.3;
     white-space: nowrap;
   }
 
@@ -753,23 +800,22 @@
   .other-message {
     align-self: flex-start;
     background-color: #f1f3f4;
-    color: #333;
   }
 
   .own-message .message-author {
-    color: rgba(255, 255, 255, 0.8);
+    color: #fff;
   }
 
   .other-message .message-author {
-    color: #666;
+    color: #fff;
   }
 
   .own-message .message-time {
-    color: rgba(255, 255, 255, 0.8);
+    color: #fff;
   }
 
   .other-message .message-time {
-    color: #666;
+    color: #fff;
   }
 
   .typing-indicator {
