@@ -136,7 +136,6 @@ wss.on('connection', (ws, req) => {
       const timestamps = wsMessageTimestamps.get(clientId);
       const recentMessages = timestamps.filter(t => now - t < 1000);
       
-      console.log(`[WS] Message from ${clientIp} (Client ID: ${clientId}). Messages/second: ${recentMessages.length}`);
       if (recentMessages.length >= MAX_WS_MESSAGES_PER_SECOND) {
         console.log(`[RateLimit] Client ${clientId} exceeded message rate limit`);
         ws.send(JSON.stringify({ type: 'rate_limit_exceeded' }));

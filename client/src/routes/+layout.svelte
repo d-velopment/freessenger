@@ -1,4 +1,5 @@
 <script>
+  import '../styles.css';
   import { onMount } from 'svelte';
   import { wsManager } from '$lib/websocket.js';
   import { page } from '$app/stores';
@@ -18,26 +19,3 @@
 </svelte:head>
 
 <slot />
-
-<style>
-  :global(html, body) {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow-x: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #ffffff;
-    color: #333333;
-    transition: background-color 0.3s ease, color 0.3s ease;
-  }
-
-  :global(body.dark) {
-    background-color: #1a1a1a;
-    color: #e0e0e0;
-  }
-
-  :global(*) {
-    box-sizing: border-box;
-  }
-</style>

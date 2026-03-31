@@ -117,7 +117,7 @@
     font-optical-sizing: auto;
     font-weight: 400;
     font-style: normal;
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: bold;
     text-align: left;
   }
@@ -148,7 +148,7 @@
 
   .info p {
     margin: 0;
-    font-size: 14px;
+    font-size: 1em;
     color: #555;
   }
 
@@ -181,7 +181,7 @@
     margin-bottom: 20px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 1em;
     font-family: monospace;
   }
 
@@ -192,7 +192,7 @@
     padding: 12px 24px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 1em;
   }
 
   button:hover:not(:disabled) {
@@ -209,7 +209,7 @@
     color: #333;
     font-family: "Oswald", sans-serif;
     font-weight: bold;
-    font-size: 22px;
+    font-size: 1.375rem;
   }
 
   .status {
@@ -217,7 +217,7 @@
     padding: 15px;
     background-color: #f0f0f0;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 1em;
     display: none;
   }
 
@@ -231,67 +231,4 @@
     font-weight: bold;
   }
 
-  /* Dark theme styles */
-  :global(body.dark) .container {
-    background-color: #2d2d2d;
-    border: 1px solid #404040;
-  }
-
-  :global(body.dark) h1 {
-    color: #f0f0f0;
-  }
-
-  :global(body.dark) p {
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) h2 {
-    color: #e0e0e0;
-    border-bottom: 1px solid #404040;
-  }
-
-  :global(body.dark) input {
-    background-color: #3d3d3d;
-    border: 1px solid #555;
-    color: #e0e0e0;
-  }
-
-  :global(body.dark) input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
-
-  :global(body.dark) button {
-    background-color: #007bff;
-    color: white;
-  }
-
-  :global(body.dark) button:hover {
-    background-color: #0056b3;
-  }
-
-  :global(body.dark) button:disabled {
-    background-color: #555;
-    color: #999;
-  }
-
-  :global(body.dark) .info {
-    background-color: #00596c;
-  }
-
-  :global(body.dark) .info p {
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .status {
-    background-color: #404040;
-  }
-
-  :global(body.dark) .status p {
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .status strong {
-    color: #ff6666;
-  }
 </style>

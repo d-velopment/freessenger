@@ -659,7 +659,7 @@
     font-optical-sizing: auto;
     font-weight: 400;
     font-style: normal;
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: bold;
     color: #333;
     background: none;
@@ -681,7 +681,7 @@
   .chat-header h2 {
     margin: 0;
     color: #ddd;
-    font-size: 8px;
+    font-size: 0.5em;
     line-height: 10px;
     font-weight: 100;
     word-break: break-all;
@@ -695,7 +695,7 @@
   }
 
   .participant-count {
-    font-size: 14px;
+    font-size: 1em;
   }
 
   .share-btn {
@@ -705,7 +705,7 @@
     padding: 6px 12px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 0.8em;
     transition: background-color 0.2s;
     display: flex;
     align-items: center;
@@ -745,7 +745,7 @@
   }
 
   .message-author {
-    font-size: 11px;
+    font-size: 0.8125rem;
     font-weight: 300;
     margin-bottom: 2px;
     opacity: 0.7;
@@ -759,7 +759,7 @@
   }
 
   .message-content {
-    font-size: 14px;
+    font-size: 1em;
     font-weight: 400;
     white-space: pre-wrap;
     line-height: 1.4;
@@ -767,7 +767,7 @@
   }
 
   .message-time {
-    font-size: 11px;
+    font-size: 0.8125rem;
     font-weight: 300;
     opacity: 0.7;
     white-space: nowrap;
@@ -815,7 +815,7 @@
   }
 
   .typing-author {
-    font-size: 11px;
+    font-size: 0.8125rem;
     font-weight: 300;
     opacity: 0.7;
   }
@@ -879,7 +879,7 @@
     color: #cc0000;
     padding: 8px 12px;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 1em;
     text-align: center;
   }
 
@@ -888,7 +888,7 @@
     border: 1px solid #ccc;
     border-radius: 20px;
     padding: 12px;
-    font-size: 14px;
+    font-size: 1em;
     font-family: inherit;
     resize: none;
     min-height: 40px;
@@ -953,117 +953,5 @@
       width: 16px;
       height: 16px;
     }
-  }
-
-  /* Dark theme styles */
-  :global(body.dark) .chat-container {
-    background-color: #2d2d2d;
-  }
-
-  :global(body.dark) .chat-header {
-    background-color: #404040;
-    border-bottom: 1px solid #555;
-  }
-
-  :global(body.dark) .app-title {
-    color: #f0f0f0;
-  }
-
-  :global(body.dark) .chat-header h2 {
-    color: #666;
-  }
-
-  :global(body.dark) .messages-container {
-    background-color: #2d2d2d;
-  }
-
-  :global(body.dark) .other-message {
-    background-color: #404040;
-    color: #e0e0e0;
-  }
-
-  :global(body.dark) .other-message .message-author {
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .other-message .message-time {
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .typing-indicator {
-    background-color: #404040;
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .typing-author {
-    color: #b0b0b0;
-  }
-
-  :global(body.dark) .typing-dots span {
-    background-color: #b0b0b0;
-  }
-
-  :global(body.dark) .message-input {
-    background-color: #404040;
-    border-top: 1px solid #555;
-  }
-
-  :global(body.dark) .message-input textarea {
-    background-color: #3d3d3d;
-    border: 1px solid #555;
-    color: #e0e0e0;
-  }
-
-  :global(body.dark) .message-input textarea:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
-
-  :global(body.dark) .message-input textarea:disabled {
-    background-color: #555;
-    opacity: 0.5;
-  }
-
-  :global(body.dark) .rate-limit-warning {
-    background-color: #4d1a1a;
-    border-color: #663333;
-    color: #ff8080;
-  }
-
-  :global(body.dark) .send-btn {
-    background-color: #007bff;
-    color: white;
-  }
-
-  :global(body.dark) .send-btn:hover:not(:disabled) {
-    background-color: #0056b3;
-  }
-
-  :global(body.dark) .send-btn:disabled {
-    background-color: #555;
-    color: #999;
-  }
-
-  :global(body.dark) .share-btn {
-    background-color: #17a2b8;
-    color: white;
-  }
-
-  :global(body.dark) .share-btn:hover {
-    background-color: #138496;
-  }
-
-  :global(body.dark) .share-btn:active {
-    background-color: #117a8b;
-  }
-
-  .copy-btn.copied {
-    background-color: #28a745 !important;
-    color: white !important;
-  }
-
-  :global(body.dark) .copy-btn.copied {
-    background-color: #28a745 !important;
-    color: white !important;
   }
 </style>

@@ -31,9 +31,4 @@
   .theme-toggle:hover {
     background-color: rgba(128, 128, 128, 0.1);
   }
-
-  /* Dark theme hover effect */
-  :global(body.dark) .theme-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
 </style>

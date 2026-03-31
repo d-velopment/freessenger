@@ -1,0 +1,198 @@
+/* Global base styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  background-color: #ffffff;
+  color: #333333;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.dark {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Root page dark theme styles */
+body.dark .container {
+  background-color: #2d2d2d;
+  border: 1px solid #404040;
+}
+
+body.dark h1 {
+  color: #f0f0f0;
+}
+
+body.dark p {
+  color: #b0b0b0;
+}
+
+body.dark h2 {
+  color: #e0e0e0;
+  border-bottom: 1px solid #404040;
+}
+
+body.dark input {
+  background-color: #3d3d3d;
+  border: 1px solid #555;
+  color: #e0e0e0;
+}
+
+body.dark input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+body.dark button {
+  background-color: #007bff;
+  color: white;
+}
+
+body.dark button:hover {
+  background-color: #0056b3;
+}
+
+body.dark button:disabled {
+  background-color: #555;
+  color: #999;
+}
+
+body.dark .info {
+  background-color: #00596c;
+}
+
+body.dark .info p {
+  color: #b0b0b0;
+}
+
+body.dark .status {
+  background-color: #404040;
+}
+
+body.dark .status p {
+  color: #b0b0b0;
+}
+
+body.dark .status strong {
+  color: #ff6666;
+}
+
+/* Chat page dark theme styles */
+body.dark .chat-container {
+  background-color: #2d2d2d;
+}
+
+body.dark .chat-header {
+  background-color: #404040;
+  border-bottom: 1px solid #555;
+}
+
+body.dark .app-title {
+  color: #f0f0f0;
+}
+
+body.dark .chat-header h2 {
+  color: #666;
+}
+
+body.dark .messages-container {
+  background-color: #2d2d2d;
+}
+
+body.dark .other-message {
+  background-color: #404040;
+  color: #e0e0e0;
+}
+
+body.dark .other-message .message-author {
+  color: #b0b0b0;
+}
+
+body.dark .other-message .message-time {
+  color: #b0b0b0;
+}
+
+body.dark .typing-indicator {
+  background-color: #404040;
+  color: #b0b0b0;
+}
+
+body.dark .typing-author {
+  color: #b0b0b0;
+}
+
+body.dark .typing-dots span {
+  background-color: #b0b0b0;
+}
+
+body.dark .message-input {
+  background-color: #404040;
+  border-top: 1px solid #555;
+}
+
+body.dark .message-input textarea {
+  background-color: #3d3d3d;
+  border: 1px solid #555;
+  color: #e0e0e0;
+}
+
+body.dark .message-input textarea:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+body.dark .message-input textarea:disabled {
+  background-color: #555;
+  opacity: 0.5;
+}
+
+body.dark .rate-limit-warning {
+  background-color: #4d1a1a;
+  border-color: #663333;
+  color: #ff8080;
+}
+
+body.dark .send-btn {
+  background-color: #007bff;
+  color: white;
+}
+
+body.dark .send-btn:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+body.dark .send-btn:disabled {
+  background-color: #555;
+  color: #999;
+}
+
+body.dark .share-btn {
+  background-color: #17a2b8;
+  color: white;
+}
+
+body.dark .share-btn:hover {
+  background-color: #138496;
+}
+
+body.dark .share-btn:active {
+  background-color: #117a8b;
+}
+
+body.dark .copy-btn.copied {
+  background-color: #28a745 !important;
+  color: white !important;
+}
+
+body.dark .theme-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
