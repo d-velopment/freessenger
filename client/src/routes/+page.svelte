@@ -68,22 +68,6 @@
         {creatingRoom ? "Creating..." : "Create New Room"}
       </button>
     </div>
-
-    <div class="or">OR</div>
-
-    <div class="join-section">
-      <h2><span class="free">JOIN</span>ROOM</h2>
-      <input
-        type="text"
-        bind:value={roomHash}
-        placeholder="Enter room hash (64 characters)"
-        on:keypress={handleKeyPress}
-        maxlength="64"
-      />
-      <button on:click={joinRoom} disabled={!roomHash.trim()}>
-        Join Room
-      </button>
-    </div>
   </div>
 
   <div class="status">
@@ -134,7 +118,6 @@
   .intro {
     display: flex;
     flex-direction: column;
-
     padding: 10px 0 20px;
     border-top: 1px solid #ddd;
   }
@@ -163,26 +146,10 @@
     gap: 10px;
   }
 
-  .join-section,
   .create-section {
     padding: 20px;
     border: 1px solid #ddd;
     border-radius: 8px;
-  }
-
-  .or {
-    font-weight: bold;
-    color: #888;
-  }
-
-  input {
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 20px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1em;
-    font-family: monospace;
   }
 
   button {

@@ -409,52 +409,24 @@
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendMessage();
+      scrollToBottom();
     }
   }
 
   function onInputFocus() {
     scrollToBottom();
-    setTimeout(() => {
-      // isEditing = true;
-    }, 100);
   }
 
   function onInputBlur() {
-    // isEditing = false;
-    setTimeout(() => {
-      scrollToBottom();
-    }, 100);
+    scrollToBottom();
   }
 
   function scrollToBottom() {
     if (messagesEndElement) {
-      messagesEndElement.scrollIntoView();
+      setTimeout(() => {
+        messagesEndElement.scrollIntoView({ block: 'end',  behavior: 'smooth' });
+      }, 100);
     }
-  }
-
-  function copyRoomHash() {
-    navigator.clipboard
-      .writeText(roomHash)
-      .then(() => {
-        copySuccess = true;
-        setTimeout(() => {
-          copySuccess = false;
-        }, 2000);
-      })
-      .catch((err) => {
-        console.error("Failed to copy room hash:", err);
-        // Fallback for older browsers
-        const textArea = document.createElement("textarea");
-        textArea.value = roomHash;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
-        copySuccess = true;
-        setTimeout(() => {
-          copySuccess = false;
-        }, 2000);
-      });
   }
 
   function shareViaSMS() {
@@ -513,9 +485,7 @@
       </button>
       <div class="header-info">
         <span class="participant-count">{participantCount} online</span>
-        <!-- button class="copy-btn" class:copied={copySuccess} on:click={copyRoomHash}>
-        {copySuccess ? "Copied!" : "Copy"}
-      </button -->
+
         <button class="share-btn" on:click={shareViaSMS}>
           <svg
             width="16"
@@ -600,14 +570,15 @@
         disabled={!newMessage.trim() || isRateLimited}
       >
         <svg
-          width="20"
-          height="20"
+          width="24"
+          height="24"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
+          style="transform: rotate(45deg) translate(-2px, 2px);"
         >
           <line x1="22" y1="2" x2="11" y2="13"></line>
           <polygon points="22 2 15 22 11 13 2 9"></polygon>
@@ -870,7 +841,6 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 8px;
   }
 
   .rate-limit-warning {

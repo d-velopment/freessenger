@@ -123,8 +123,7 @@ wss.on('connection', (ws, req) => {
     return;
   }
   wsConnections.set(clientIp, connectionsFromIp + 1);
-  console.log(`[WS] Connection from ${clientIp} (${connectionsFromIp + 1}/${MAX_WS_CONNECTIONS_PER_IP})`);
-
+  
   ws.on('message', (message) => {
     try {
       // Check message rate limit
