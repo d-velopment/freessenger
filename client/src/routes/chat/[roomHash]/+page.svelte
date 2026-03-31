@@ -302,6 +302,21 @@
     return `${namesStructure.namesMoods[moodIndex]} ${namesStructure.namesAnimals[animalIndex]}`;
   };
 
+  export const getInitials = (clientId) => {
+    if (!clientId) return "?";
+    
+    const fullName = getNameMood(clientId);
+    const words = fullName.split(" ");
+    
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    } else if (words.length === 1) {
+      return words[0].substring(0, 2).toUpperCase();
+    }
+    
+    return "??";
+  };
+
   function getColorFromClientId(clientId) {
     if (!clientId) return '#f1f3f4';
 
@@ -359,6 +374,16 @@
     wsManager.on("message", (data) => {
       // Ignore messages from ourselves (we already added them locally)
       if (data.clientId === myClientId) {
+        return;
+      }
+
+      // Handle system messages (connect/disconnect)
+      if (data.isSystem) {
+        // Format system message as "{name} connected/disconnected"
+        data.message = `${getNameMood(data.clientId)} ${data.message}`;
+        data.isOwn = false;
+        messages = [...messages, data];
+        scrollToBottom();
         return;
       }
 
@@ -564,10 +589,20 @@
         class="message"
         class:own-message={message.isOwn}
         class:other-message={!message.isOwn}
+        class:system-message={message.isSystem}
         style:background-color={!message.isOwn ? getColorFromClientId(message.clientId) : undefined}
         transition:fly={{ y: message.isOwn ? 20 : -20, duration: 300 }}
       >
-        <div class="message-author">{getNameMood(message.clientId)}</div>
+        {#if !message.isSystem}
+          <div class="message-author">
+            <div 
+              class="author-initials"
+            >
+              {getInitials(message.clientId)}
+            </div>
+            <span class="author-full-name">{getNameMood(message.clientId)}</span>
+          </div>
+        {/if}
         <div class="message-body">
           <span class="message-content">{message.message}</span>
           <span class="message-time">{formatTime(message.timestamp)}</span>
@@ -767,6 +802,29 @@
     font-weight: 300;
     margin-bottom: 2px;
     opacity: 0.3;
+    display: flex;
+    align-items: center;
+    gap: 0.45em;
+  }
+
+  .author-initials {
+    width: 20px;
+    height: 20px;
+    padding-top: 0.1em;
+    margin-left: -0.9em;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5rem;
+    font-weight: 600;
+    color: white;
+    flex-shrink: 0;
+    background-color: #0005;
+  }
+
+  .author-full-name {
+    flex: 1;
   }
 
   .message-body {
@@ -800,6 +858,18 @@
   .other-message {
     align-self: flex-start;
     background-color: #f1f3f4;
+  }
+
+  .system-message {
+    align-self: flex-start;
+    background-color: #f1f3f4;
+    font-style: italic;
+  }
+
+  .system-message .message-content {
+    opacity: 0.3;
+    font-size: .9em;
+    font-style: italic;
   }
 
   .own-message .message-author {

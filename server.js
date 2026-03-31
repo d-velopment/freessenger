@@ -8,7 +8,7 @@ const os = require('os');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
-const MAX_WS_CONNECTIONS_PER_IP = 5;
+const MAX_WS_CONNECTIONS_PER_IP = 10;
 const MAX_WS_MESSAGES_PER_SECOND = 5;
 
 // --------------------------------------------------------------
@@ -193,6 +193,15 @@ wss.on('connection', (ws, req) => {
               count: rooms.get(currentRoom).size
             }, ws);
 
+            // Broadcast connection message to others in the room
+            broadcastToRoom(currentRoom, {
+              type: 'message',
+              message: 'connected',
+              timestamp: Date.now(),
+              clientId: clientId,
+              isSystem: true
+            }, ws);
+
             // Broadcast updated stats to all clients
             broadcastStats();
           }
@@ -288,6 +297,15 @@ wss.on('connection', (ws, req) => {
           broadcastToRoom(currentRoom, {
             type: 'participant_count',
             count: room.size
+          });
+
+          // Broadcast disconnection message to others in the room
+          broadcastToRoom(currentRoom, {
+            type: 'message',
+            message: 'disconnected',
+            timestamp: Date.now(),
+            clientId: clientId,
+            isSystem: true
           });
         }
       }
