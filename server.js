@@ -4,9 +4,40 @@ const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
 const http = require('http');
-
+const os = require('os');
 const app = express();
+
 const PORT = process.env.PORT || 3000;
+const MAX_WS_CONNECTIONS_PER_IP = 5;
+const MAX_WS_MESSAGES_PER_SECOND = 5;
+
+// --------------------------------------------------------------
+
+// Rate limiting - store request timestamps per IP
+const requestTimestamps = new Map();
+
+// Rate limiting middleware (MAX_WS_MESSAGES_PER_SECOND requests per second per IP)
+app.use((req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  
+  if (!requestTimestamps.has(ip)) {
+    requestTimestamps.set(ip, []);
+  }
+  
+  const timestamps = requestTimestamps.get(ip);
+  // Remove timestamps older than 1 second
+  const recentTimestamps = timestamps.filter(t => now - t < 1000);
+  
+  if (recentTimestamps.length >= Math.max(MAX_WS_MESSAGES_PER_SECOND * 10, 20)) { // 20 is minimum for Svelte Kit
+    console.log("[RateLimit] IP " + ip + " exceeded HTTP request rate limit", recentTimestamps.length);
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+
+  recentTimestamps.push(now);
+  requestTimestamps.set(ip, recentTimestamps);
+  next();
+});
 
 // Serve static files from client directory
 app.use(express.static(path.join(__dirname, 'client/dist')));
@@ -14,6 +45,23 @@ app.use(express.static(path.join(__dirname, 'client/dist')));
 // Create HTTP server and WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+
+// Cleanup old IP requests periodically (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  requestTimestamps.forEach((timestamps, ip) => {
+    const recentTimestamps = timestamps.filter(t => now - t < 1000);
+    if (recentTimestamps.length === 0) {
+      requestTimestamps.delete(ip);
+    } else {
+      requestTimestamps.set(ip, recentTimestamps);
+    }
+  });
+}, 5 * 60 * 1000);
+
+// WebSocket rate limiting
+const wsConnections = new Map(); // IP -> count
+const wsMessageTimestamps = new Map(); // clientId -> timestamps
 
 // Store rooms and their participants
 const rooms = new Map();
@@ -37,15 +85,78 @@ function getParticipantCount(roomHash) {
   return room ? room.size : 0;
 }
 
-wss.on('connection', (ws) => {
+// Get global statistics
+function getStats() {
+  let totalUsers = 0;
+  rooms.forEach(room => {
+    totalUsers += room.size;
+  });
+  return {
+    onlineUsers: totalUsers,
+    activeRooms: rooms.size
+  };
+}
+
+// Broadcast stats to all connected clients
+function broadcastStats() {
+  const stats = getStats();
+  console.log(`[Stats] Online: ${stats.onlineUsers}, Rooms: ${stats.activeRooms}`);
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({
+        type: 'stats',
+        ...stats
+      }));
+    }
+  });
+}
+
+wss.on('connection', (ws, req) => {
   let currentRoom = null;
   const clientId = Math.random().toString(36).substr(2, 9); // Unique ID for this client
+  const clientIp = req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+
+  // Check max connections per IP
+  const connectionsFromIp = wsConnections.get(clientIp) || 0;
+  if (connectionsFromIp >= MAX_WS_CONNECTIONS_PER_IP) {
+    ws.close(1008, 'Too many connections from your IP');
+    return;
+  }
+  wsConnections.set(clientIp, connectionsFromIp + 1);
+  console.log(`[WS] Connection from ${clientIp} (${connectionsFromIp + 1}/${MAX_WS_CONNECTIONS_PER_IP})`);
 
   ws.on('message', (message) => {
     try {
+      // Check message rate limit
+      const now = Date.now();
+      if (!wsMessageTimestamps.has(clientId)) {
+        wsMessageTimestamps.set(clientId, []);
+      }
+      
+      const timestamps = wsMessageTimestamps.get(clientId);
+      const recentMessages = timestamps.filter(t => now - t < 1000);
+      
+      console.log(`[WS] Message from ${clientIp} (Client ID: ${clientId}). Messages/second: ${recentMessages.length}`);
+      if (recentMessages.length >= MAX_WS_MESSAGES_PER_SECOND) {
+        console.log(`[RateLimit] Client ${clientId} exceeded message rate limit`);
+        ws.send(JSON.stringify({ type: 'rate_limit_exceeded' }));
+        return;
+      }
+      
+      recentMessages.push(now);
+      wsMessageTimestamps.set(clientId, recentMessages);
+
       const data = JSON.parse(message);
 
       switch (data.type) {
+        case 'get_stats':
+          // Send current stats to requesting client
+          ws.send(JSON.stringify({
+            type: 'stats',
+            ...getStats()
+          }));
+          break;
+
         case 'join':
           if (data.roomHash && isValidHash(data.roomHash)) {
             // Leave current room if any
@@ -83,6 +194,9 @@ wss.on('connection', (ws) => {
               type: 'participant_count',
               count: rooms.get(currentRoom).size
             }, ws);
+
+            // Broadcast updated stats to all clients
+            broadcastStats();
           }
           break;
 
@@ -152,6 +266,18 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    // Decrement connection count for this IP
+    const connectionsFromIp = wsConnections.get(clientIp) || 1;
+    if (connectionsFromIp <= 1) {
+      wsConnections.delete(clientIp);
+    } else {
+      wsConnections.set(clientIp, connectionsFromIp - 1);
+    }
+    
+    // Clean up message timestamps
+    wsMessageTimestamps.delete(clientId);
+    console.log(`[WS] Disconnected from ${clientIp}`);
+
     // Remove from current room
     if (currentRoom) {
       const room = rooms.get(currentRoom);
@@ -186,6 +312,9 @@ wss.on('connection', (ws) => {
         }
       }
     }
+
+    // Broadcast updated stats to all clients
+    broadcastStats();
   });
 });
 
@@ -201,14 +330,48 @@ function broadcastToRoom(roomHash, data, excludeWs = null) {
   }
 }
 
+// Cleanup WebSocket message timestamps periodically (every minute)
+setInterval(() => {
+  const now = Date.now();
+  wsMessageTimestamps.forEach((timestamps, clientId) => {
+    const recentTimestamps = timestamps.filter(t => now - t < 1000);
+    if (recentTimestamps.length === 0) {
+      wsMessageTimestamps.delete(clientId);
+    } else {
+      wsMessageTimestamps.set(clientId, recentTimestamps);
+    }
+  });
+}, 60 * 1000);
+
 // Serve the main page for all routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/dist/index.html'));
 });
 
+// Get local IP address for network access
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal and non-IPv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
-  console.log(`WebSocket server running on same port`);
-  console.log(`Access from other devices: http://YOUR_IP:${PORT}`);
+  if (process.env.NODE_ENV === 'production') {
+    // Production - just show it's listening
+    console.log(`\nServer running on port ${PORT}`);
+    console.log(`WebSocket server running on same port\n`);
+  } else {
+    // Development - show local IP
+    const localIP = getLocalIP();
+    console.log(`\nServer running on http://${localIP}:${PORT}`);
+    console.log(`WebSocket server running on same port\n`);
+  }
 });
 

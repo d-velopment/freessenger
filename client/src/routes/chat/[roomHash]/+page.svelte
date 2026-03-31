@@ -9,11 +9,15 @@
   let messages = [];
   let newMessage = "";
   let participantCount = 0;
-  let messagesContainer;
+  let messagesEndElement; // Reference to scroll anchor
   let copySuccess = false;
   let myClientId = null;
   let typingUsers = new Set(); // Store typing user IDs
   let typingTimeout = null;
+  let typingIndicatorSent = false; // Track if we've sent startTyping
+  let isRateLimited = false;
+  let isEditing = false;
+  let warningMessage = "⚠️ Slow down! Too many actions.";
 
   const roomHash = $page.params.roomHash;
 
@@ -332,7 +336,21 @@
       }
     });
 
-    messagesContainer = document.querySelector(".messages-container");
+    wsManager.on("rate_limit_exceeded", () => {
+      isRateLimited = true;
+      warningMessage = "⚠️ Slow down! Too many actions.";
+      setTimeout(() => {
+        isRateLimited = false;
+        warningMessage = "";
+      }, 3000);
+    });
+
+    // Handle keyboard close on mobile - scroll to bottom
+    window.addEventListener("resize", scrollToBottom);
+
+    return () => {
+      window.removeEventListener("resize", scrollToBottom);
+    };
   });
 
   function handleInput() {
@@ -343,14 +361,21 @@
 
     // Start typing indicator if message is not empty
     if (newMessage.trim()) {
-      wsManager.startTyping();
+      // Only send startTyping once per typing session
+      if (!typingIndicatorSent) {
+        wsManager.startTyping();
+        typingIndicatorSent = true;
+      }
 
       // Set timeout to stop typing after 3 seconds of inactivity
       typingTimeout = setTimeout(() => {
         wsManager.stopTyping();
+        typingIndicatorSent = false;
       }, 3000);
     } else {
+      // Message is empty - stop typing immediately
       wsManager.stopTyping();
+      typingIndicatorSent = false;
     }
   }
 
@@ -358,6 +383,7 @@
     if (newMessage.trim()) {
       // Stop typing when sending message
       wsManager.stopTyping();
+      typingIndicatorSent = false;
       if (typingTimeout) {
         clearTimeout(typingTimeout);
         typingTimeout = null;
@@ -386,11 +412,23 @@
     }
   }
 
+  function onInputFocus() {
+    scrollToBottom();
+    setTimeout(() => {
+      // isEditing = true;
+    }, 100);
+  }
+
+  function onInputBlur() {
+    // isEditing = false;
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+  }
+
   function scrollToBottom() {
-    if (messagesContainer) {
-      setTimeout(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      }, 100);
+    if (messagesEndElement) {
+      messagesEndElement.scrollIntoView();
     }
   }
 
@@ -458,12 +496,17 @@
   }
 
   function goHome() {
-    goto('/');
+    goto("/");
   }
 </script>
 
 <div class="chat-container">
-  <div class="chat-header">
+  <div
+    class="chat-header"
+    style:--header-top={isEditing
+      ? `${window.scrollY || window.pageYOffset || document.documentElement.scrollTop}px`
+      : "0"}
+  >
     <div class="row">
       <button class="app-title" on:click={goHome} aria-label="Go to home page">
         <span class="free">FREE</span>SSENGER
@@ -474,7 +517,16 @@
         {copySuccess ? "Copied!" : "Copy"}
       </button -->
         <button class="share-btn" on:click={shareViaSMS}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
             <circle cx="9" cy="7" r="4"></circle>
             <line x1="19" y1="10" x2="19" y2="16"></line>
@@ -517,36 +569,51 @@
         </div>
       </div>
     {/each}
+
+    <!-- Scroll anchor to ensure keyboard doesn't break scroll position -->
+    <div bind:this={messagesEndElement}></div>
   </div>
 
+  {#if isRateLimited}
+    <div class="rate-limit-warning" transition:fly={{ y: 20, duration: 300 }}>
+      {warningMessage}
+    </div>
+  {/if}
+
   <div class="message-input">
-    <textarea
-      bind:value={newMessage}
-      placeholder="Type your message (max 2000 characters)..."
-      on:keypress={handleKeyPress}
-      on:input={handleInput}
-      maxlength="2000"
-      rows="1"
-    ></textarea>
-    <button
-      class="send-btn"
-      on:click={sendMessage}
-      disabled={!newMessage.trim()}
-    >
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+    <div class="message-input-row">
+      <textarea
+        bind:value={newMessage}
+        placeholder="Type your message (max 2000 characters)..."
+        on:focus={onInputFocus}
+        on:blur={onInputBlur}
+        on:keypress={handleKeyPress}
+        on:input={handleInput}
+        maxlength="2000"
+        rows="1"
+        disabled={isRateLimited}
+      ></textarea>
+      <!-- svelte-ignore a11y_consider_explicit_label -->
+      <button
+        class="send-btn"
+        on:click={sendMessage}
+        disabled={!newMessage.trim() || isRateLimited}
       >
-        <line x1="22" y1="2" x2="11" y2="13"></line>
-        <polygon points="22 2 15 22 11 13 2 9"></polygon>
-      </svg>
-    </button>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9"></polygon>
+        </svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -567,6 +634,8 @@
   }
 
   .chat-header {
+    position: sticky;
+    top: var(--header-top, 0);
     padding: 10px 10px 0 20px;
     background-color: #f8f9fa;
     border-bottom: 1px solid #dee2e6;
@@ -576,7 +645,7 @@
     align-items: flex-end;
     flex-shrink: 0;
   }
-  
+
   .chat-header .row {
     display: flex;
     align-items: center;
@@ -626,7 +695,6 @@
   }
 
   .participant-count {
-    color: #666;
     font-size: 14px;
   }
 
@@ -793,9 +861,26 @@
     background-color: #f8f9fa;
     border-top: 1px solid #dee2e6;
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .message-input-row {
+    display: flex;
     align-items: flex-end;
     justify-content: center;
-    flex-shrink: 0;
+    gap: 8px;
+  }
+
+  .rate-limit-warning {
+    background-color: #ffe6e6;
+    border: 1px solid #ffcccc;
+    color: #cc0000;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
   }
 
   .message-input textarea {
@@ -809,6 +894,13 @@
     min-height: 40px;
     max-height: 120px;
     overflow-y: auto;
+  }
+
+  .message-input textarea:disabled {
+    background-color: #f0f0f0;
+    color: #999;
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   .send-btn {
@@ -925,6 +1017,17 @@
   :global(body.dark) .message-input textarea:focus {
     border-color: #007bff;
     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
+
+  :global(body.dark) .message-input textarea:disabled {
+    background-color: #555;
+    opacity: 0.5;
+  }
+
+  :global(body.dark) .rate-limit-warning {
+    background-color: #4d1a1a;
+    border-color: #663333;
+    color: #ff8080;
   }
 
   :global(body.dark) .send-btn {

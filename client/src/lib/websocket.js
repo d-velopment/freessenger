@@ -3,7 +3,16 @@ class WebSocketManager {
     this.ws = null;
     this.roomHash = null;
     this.callbacks = {};
+    this.onConnectedCallbacks = [];
     this.clientId = Math.random().toString(36).substr(2, 9); // Generate unique ID for this client
+  }
+
+  onConnected(callback) {
+    this.onConnectedCallbacks.push(callback);
+    // If already connected, call immediately
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      callback();
+    }
   }
 
   connect() {
@@ -18,6 +27,9 @@ class WebSocketManager {
 
     this.ws.onopen = () => {
       console.log('Connected to WebSocket server');
+      // Call all registered onConnected callbacks
+      this.onConnectedCallbacks.forEach(callback => callback());
+      
       if (this.roomHash) {
         this.joinRoom(this.roomHash);
       }
@@ -73,6 +85,10 @@ class WebSocketManager {
 
   stopTyping() {
     this.send({ type: 'typing_stop' });
+  }
+
+  getStats() {
+    this.send({ type: 'get_stats' });
   }
 
   disconnect() {

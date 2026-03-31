@@ -2,9 +2,12 @@
   import { goto } from "$app/navigation";
   import { wsManager } from "$lib/websocket.js";
   import ThemeToggle from "$lib/ThemeToggle.svelte";
+  import { onMount } from "svelte";
 
   let roomHash = "";
   let creatingRoom = false;
+  let onlineUsers = 0;
+  let activeRooms = 0;
 
   function joinRoom() {
     if (roomHash.trim()) {
@@ -25,13 +28,30 @@
       joinRoom();
     }
   }
+
+  onMount(() => {
+    // Listen for stats updates
+    wsManager.on("stats", (data) => {
+      onlineUsers = data.onlineUsers;
+      activeRooms = data.activeRooms;
+    });
+
+    // Request initial stats after WebSocket is connected
+    wsManager.onConnected(() => {
+      wsManager.getStats();
+    });
+  });
 </script>
 
 <div class="container">
   <div class="header">
-    <h1><span class="free">FREE</span>SSENGER
-      <span class="tagline">- a messenger <span class="free">free</span> from registration</span></h1>
-    
+    <h1>
+      <span class="free">FREE</span>SSENGER
+      <span class="tagline"
+        >- a messenger <span class="free">free</span> from registration</span
+      >
+    </h1>
+
     <ThemeToggle />
   </div>
 
@@ -64,6 +84,13 @@
         Join Room
       </button>
     </div>
+  </div>
+
+  <div class="status">
+    <p>
+      <strong>{onlineUsers}</strong> Users •
+      <strong>{activeRooms}</strong> Rooms
+    </p>
   </div>
 </div>
 
@@ -107,7 +134,7 @@
   .intro {
     display: flex;
     flex-direction: column;
-    
+
     padding: 10px 0 20px;
     border-top: 1px solid #ddd;
   }
@@ -185,6 +212,25 @@
     font-size: 22px;
   }
 
+  .status {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f0f0f0;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
+
+  .status p {
+    margin: 0;
+    color: #555;
+  }
+
+  .status strong {
+    color: #ff0000;
+    font-weight: bold;
+  }
+
   /* Dark theme styles */
   :global(body.dark) .container {
     background-color: #2d2d2d;
@@ -235,5 +281,17 @@
 
   :global(body.dark) .info p {
     color: #b0b0b0;
+  }
+
+  :global(body.dark) .status {
+    background-color: #404040;
+  }
+
+  :global(body.dark) .status p {
+    color: #b0b0b0;
+  }
+
+  :global(body.dark) .status strong {
+    color: #ff6666;
   }
 </style>
