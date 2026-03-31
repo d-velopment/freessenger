@@ -116,6 +116,12 @@ wss.on('connection', (ws, req) => {
   const clientId = Math.random().toString(36).substr(2, 9); // Unique ID for this client
   const clientIp = req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
 
+  // Send server clientId to client immediately
+  ws.send(JSON.stringify({
+    type: 'client_id',
+    clientId: clientId
+  }));
+
   // Check max connections per IP
   const connectionsFromIp = wsConnections.get(clientIp) || 0;
   if (connectionsFromIp >= MAX_WS_CONNECTIONS_PER_IP) {

@@ -4,7 +4,7 @@ class WebSocketManager {
     this.roomHash = null;
     this.callbacks = {};
     this.onConnectedCallbacks = [];
-    this.clientId = Math.random().toString(36).substr(2, 9); // Generate unique ID for this client
+    this.clientId = null; // Will be set by server
   }
 
   onConnected(callback) {
@@ -38,7 +38,12 @@ class WebSocketManager {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (this.callbacks[data.type]) {
+        if (data.type === 'client_id') {
+          this.clientId = data.clientId;
+          if (this.callbacks[data.type]) {
+            this.callbacks[data.type](data);
+          }
+        } else if (this.callbacks[data.type]) {
           this.callbacks[data.type](data);
         }
       } catch (error) {

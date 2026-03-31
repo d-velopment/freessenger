@@ -304,29 +304,29 @@
 
   export const getInitials = (clientId) => {
     if (!clientId) return "?";
-    
+
     const fullName = getNameMood(clientId);
     const words = fullName.split(" ");
-    
+
     if (words.length >= 2) {
       return (words[0][0] + words[1][0]).toUpperCase();
     } else if (words.length === 1) {
       return words[0].substring(0, 2).toUpperCase();
     }
-    
+
     return "??";
   };
 
   function getColorFromClientId(clientId) {
-    if (!clientId) return '#f1f3f4';
+    if (!clientId) return "#f1f3f4";
 
     // Generate hue from clientId (0-360, but skip blue range 200-240)
     const hash = parseInt(clientId.substring(0, 8), 36);
-    let hue = (hash % 360);
-    
+    let hue = hash % 360;
+
     // Avoid blue hues (roughly 200-240 degrees)
     if (hue >= 200 && hue <= 240) {
-      hue = ((hue + 120) % 360);
+      hue = (hue + 120) % 360;
     }
 
     // Pastel colors: low saturation (25-35%), high value (88-93%)
@@ -357,7 +357,7 @@
 
     const toHex = (val) => {
       const hex = Math.round((val + m) * 255).toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
+      return hex.length === 1 ? "0" + hex : hex;
     };
 
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
@@ -367,13 +367,18 @@
     // Get our client ID from WebSocket manager
     myClientId = wsManager.clientId;
 
+    // Listen for server clientId updates
+    wsManager.on("client_id", (data) => {
+      myClientId = data.clientId;
+    });
+
     // Join the room
     wsManager.joinRoom(roomHash);
 
     // Set up WebSocket event handlers
     wsManager.on("message", (data) => {
       // Ignore messages from ourselves (we already added them locally)
-      if (data.clientId === myClientId) {
+      if (data.clientId === wsManager.clientId) {
         return;
       }
 
@@ -464,7 +469,7 @@
       const messageData = {
         message: newMessage.trim(),
         timestamp: Date.now(),
-        clientId: myClientId,
+        clientId: wsManager.clientId,
         isOwn: true,
       };
 
@@ -495,7 +500,7 @@
   function scrollToBottom() {
     if (messagesEndElement) {
       setTimeout(() => {
-        messagesEndElement.scrollIntoView({ block: 'end',  behavior: 'smooth' });
+        messagesEndElement.scrollIntoView({ block: "end", behavior: "smooth" });
       }, 100);
     }
   }
@@ -555,8 +560,12 @@
         <span class="free">FREE</span>SSENGER
       </button>
       <div class="header-info">
+        {#if myClientId}
+          <span class="client-name">{getNameMood(myClientId)}</span>
+          •
+        {/if}
         <span class="participant-count">{participantCount} online</span>
-
+        •
         <button class="share-btn" on:click={shareViaSMS}>
           <svg
             width="16"
@@ -590,17 +599,18 @@
         class:own-message={message.isOwn}
         class:other-message={!message.isOwn}
         class:system-message={message.isSystem}
-        style:background-color={!message.isOwn ? getColorFromClientId(message.clientId) : undefined}
+        style:background-color={!message.isOwn
+          ? getColorFromClientId(message.clientId)
+          : undefined}
         transition:fly={{ y: message.isOwn ? 20 : -20, duration: 300 }}
       >
         {#if !message.isSystem}
           <div class="message-author">
-            <div 
-              class="author-initials"
-            >
+            <div class="author-initials">
               {getInitials(message.clientId)}
             </div>
-            <span class="author-full-name">{getNameMood(message.clientId)}</span>
+            <span class="author-full-name">{getNameMood(message.clientId)}</span
+            >
           </div>
         {/if}
         <div class="message-body">
@@ -744,7 +754,12 @@
   .header-info {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 0.5em;
+  }
+
+  .client-name {
+    font-weight: 900;
+    color: #57f;
   }
 
   .participant-count {
@@ -868,7 +883,7 @@
 
   .system-message .message-content {
     opacity: 0.3;
-    font-size: .9em;
+    font-size: 0.9em;
     font-style: italic;
   }
 
