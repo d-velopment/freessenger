@@ -31,6 +31,22 @@ function isOriginAllowed(origin) {
   return allowedOrigins.includes(origin);
 }
 
+// Sanitize message content to prevent XSS attacks
+function sanitizeMessage(message) {
+  if (typeof message !== 'string') return '';
+  
+  return message
+    // Remove HTML tags
+    .replace(/<script\b[^<]*(?:(?!<\/script>))*[^>]*>/gi, '')
+    .replace(/<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    // Remove potentially dangerous attributes
+    .replace(/on\w+\s*=/gi, '')
+    // Convert to plain text
+    .trim()
+    .substring(0, 2000); // Limit length
+}
+
 // --------------------------------------------------------------
 
 // Rate limiting - store request timestamps per IP
@@ -261,13 +277,18 @@ wss.on('connection', (ws, req) => {
 
         case 'message':
           if (currentRoom && data.message && typeof data.message === 'string') {
-            // Limit message to 2000 characters
-            const trimmedMessage = data.message.substring(0, 2000);
-
-            // Broadcast message to all participants in the room except sender
+            // Sanitize message to prevent XSS attacks
+            const sanitizedMessage = sanitizeMessage(data.message);
+            
+            // Log for debugging
+            if (sanitizedMessage !== data.message) {
+              console.log(`[Security] Message sanitized for client ${clientId}: "${data.message}" -> "${sanitizedMessage}"`);
+            }
+            
+            // Broadcast sanitized message to all participants in room except sender
             broadcastToRoom(currentRoom, {
               type: 'message',
-              message: trimmedMessage,
+              message: sanitizedMessage,
               timestamp: Date.now(),
               clientId: clientId
             }, ws); // Exclude sender

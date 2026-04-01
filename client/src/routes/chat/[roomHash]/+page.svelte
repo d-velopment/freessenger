@@ -455,6 +455,15 @@
     }
   }
 
+  // Проверка на смайлики
+  function isEmojiOnly(text) {
+    // Проверяем на обычные символы (буквы, цифры, пробелы, знаки препинания)
+    const hasNormalChars = /[a-zA-Zа-яА-ЯёЁ0-9\s.,!?;:()'"@#$%&*+\-\/=<>]/.test(text);
+    
+    // Если нет обычных символов и текст не пустой - считаем эмодзи/смайлики
+    return !hasNormalChars && text.length > 0;
+  }
+
   function sendMessage() {
     if (newMessage.trim()) {
       // Stop typing when sending message
@@ -560,10 +569,6 @@
         <span class="free">FREE</span>SSENGER
       </button>
       <div class="header-info">
-        {#if myClientId}
-          <span class="client-name">{getNameMood(myClientId)}</span>
-          •
-        {/if}
         <span class="participant-count">{participantCount} online</span>
         •
         <button class="share-btn" on:click={shareViaSMS}>
@@ -593,6 +598,13 @@
   </div>
 
   <div class="messages-container">
+    {#if myClientId}
+      <div class="client-name">
+        <span class="client-name-label">Your name:&nbsp;</span>{getNameMood(
+          myClientId,
+        )}
+      </div>
+    {/if}
     {#each messages as message (message.timestamp)}
       <div
         class="message"
@@ -614,7 +626,11 @@
           </div>
         {/if}
         <div class="message-body">
-          <span class="message-content">{message.message}</span>
+          <span
+            class="message-content"
+            class:emoji-only={isEmojiOnly(message.message)}
+            >{message.message}</span
+          >
           <span class="message-time">{formatTime(message.timestamp)}</span>
         </div>
       </div>
@@ -758,8 +774,18 @@
   }
 
   .client-name {
+    text-align: center;
+    font-size: 0.825em;
     font-weight: 900;
     color: #57f;
+    letter-spacing: -0.04em;
+    opacity: 0.5;
+    z-index: 1;
+  }
+
+  .client-name-label {
+    font-weight: 100;
+    color: #666;
   }
 
   .participant-count {
@@ -794,6 +820,7 @@
   }
 
   .messages-container {
+    position: relative;
     flex: 1;
     overflow-y: auto;
     padding: 20px;
@@ -855,6 +882,11 @@
     white-space: pre-wrap;
     line-height: 1.4;
     flex: 1;
+  }
+
+  .message-content.emoji-only {
+    font-size: 4em !important;
+    line-height: 1.2;
   }
 
   .message-time {
