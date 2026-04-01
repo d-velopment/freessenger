@@ -15,6 +15,24 @@ const MAX_WS_MESSAGES_PER_SECOND = 5;
 
 // --------------------------------------------------------------
 
+// Security functions
+function isOriginAllowed(origin) {
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://freessenger.com',
+    'https://www.freessenger.com',
+  ];
+  
+  // Дополнительно: проверяем host header для CloudFlare
+  if (!origin || origin === 'unknown') {
+    return true; // Разрешаем все без origin (CloudFlare может не отправлять origin)
+  }
+  
+  return allowedOrigins.includes(origin);
+}
+
+// --------------------------------------------------------------
+
 // Rate limiting - store request timestamps per IP
 const requestTimestamps = new Map();
 
