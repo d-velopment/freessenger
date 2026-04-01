@@ -13,36 +13,58 @@ const PORT = process.env.PORT || 3000;
 const MAX_WS_CONNECTIONS_PER_IP = 10;
 const MAX_WS_MESSAGES_PER_SECOND = 5;
 
+console.log(`[DEBUG] Starting server on port: ${PORT}`);
+console.log(`[DEBUG] Node.js version: ${process.version}`);
+console.log(`[DEBUG] Platform: ${process.platform}`);
+
+// SSL certificates for HTTPS/WSS (let's encrypt via certbot)
+let sslOptions = null;
+if (process.env.NODE_ENV === 'production') {
+  try {
+    const now = new Date();
+    const timestamp = now.toISOString();
+    const localTime = now.toLocaleString();
+    
+    sslOptions = {
+      key: fs.readFileSync('/etc/letsencrypt/live/freessenger.com/privkey.pem'),
+      cert: fs.readFileSync('/etc/letsencrypt/live/freessenger.com/fullchain.pem')
+    };
+    
+    console.log('\n' + '='.repeat(50));
+    console.log(`🔐 SSL CERTIFICATES LOADED`);
+    console.log(`📅 Date: ${localTime}`);
+    console.log(`⏰ Time: ${timestamp}`);
+    console.log(`📁 Key: /etc/letsencrypt/live/freessenger.com/privkey.pem`);
+    console.log(`📄 Cert: /etc/letsencrypt/live/freessenger.com/fullchain.pem`);
+  } catch (error) {
+    console.log('\n' + '='.repeat(50));
+    console.log(`❌ SSL CERTIFICATES NOT FOUND`);
+    console.log(`📅 Date: ${new Date().toLocaleString()}`);
+    console.log(`⏰ Time: ${new Date().toISOString()}`);
+    console.log(`🔍 Error: ${error.message}`);
+    console.log(`💡 Run: certbot --nginx -d freessenger.com -d www.freessenger.com`);
+    console.log(`🔄 Falling back to HTTP mode`);
+    sslOptions = null;
+  }
+}
+
+// --------------------------------------------------------------
+
+// Security functions
+function isOriginAllowed(origin) {
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://freessenger.com',
+    'https://www.freessenger.com',
+  ];
+  
+  return allowedOrigins.includes(origin);
+}
+
 // --------------------------------------------------------------
 
 // Rate limiting - store request timestamps per IP
 const requestTimestamps = new Map();
-
-// Security: Check origin for all HTTP requests (after static files)
-app.use((req, res, next) => {
-  // Skip origin check for static resources, health checks and OPTIONS requests
-  const isStaticResource = req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i);
-  if (req.method === 'OPTIONS' || req.path === '/health' || isStaticResource) {
-    console.log(`[DEBUG] Skipping origin check for: ${req.path}`);
-    return next();
-  }
-  
-  const origin = req.headers.origin || req.headers.referer || 'unknown';
-  
-  // Allow all localhost/127.0.0.1 access without origin check
-  if (!origin || origin === 'unknown') {
-    console.log(`[DEBUG] Allowing no-origin request from: ${req.headers.host}`);
-    return next();
-  }
-  
-  if (!isOriginAllowed(origin)) {
-    console.log(`[Security] Blocked HTTP request from unauthorized origin: ${origin}, path: ${req.path}, host: ${req.headers.host}`);
-    return res.status(403).json({ error: 'Unauthorized origin' });
-  }
-  
-  console.log(`[DEBUG] Origin allowed: ${origin}`);
-  next();
-});
 
 // Rate limiting middleware (MAX_WS_MESSAGES_PER_SECOND requests per second per IP)
 app.use((req, res, next) => {
@@ -67,12 +89,101 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from client directory
-app.use(express.static(path.join(__dirname, 'client/dist')));
+// Serve static files from client directory FIRST (before origin check)
+app.use(express.static(path.join(__dirname, 'client/dist'), {
+  maxAge: '1y',
+  etag: true,
+  lastModified: true
+}));
 
-// Create HTTP server and WebSocket server
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+// Handle root path - serve index.html
+app.get('/', (req, res) => {
+  console.log(`[DEBUG] Serving index.html for: ${req.headers.host}`);
+  console.log(`[DEBUG] Request headers:`, req.headers);
+  
+  // Установим таймаут ответа
+  res.setTimeout(30000, () => {
+    console.log(`[DEBUG] Response timeout for: ${req.headers.host}`);
+  });
+  
+  res.on('finish', () => {
+    console.log(`[DEBUG] Response sent successfully for: ${req.headers.host}`);
+  });
+  
+  res.on('error', (error) => {
+    console.log(`[DEBUG] Response error for: ${req.headers.host}`, error);
+  });
+  
+  res.sendFile(path.join(__dirname, 'client/dist', 'index.html'));
+});
+
+// Debug middleware - log all requests
+app.use((req, res, next) => {
+  console.log(`[DEBUG] ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'} - Host: ${req.headers.host}`);
+  next();
+});
+
+// Security: Check origin for all HTTP requests (after static files) - TEMPORARILY DISABLED
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Origin check DISABLED - allowing all requests`);
+  console.log(`[DEBUG] ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'} - Host: ${req.headers.host}`);
+  next();
+});
+
+// Handle errors gracefully
+process.on('uncaughtException', (error) => {
+  console.error('[ERROR] Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[ERROR] Unhandled Rejection:', reason);
+});
+
+// Express error handling
+app.use((error, req, res, next) => {
+  console.error('[ERROR] Express Error:', error);
+  console.error('[ERROR] Request URL:', req.url);
+  console.error('[ERROR] Request headers:', req.headers);
+  
+  if (!res.headersSent) {
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : error.message
+    });
+  }
+});
+
+// WebSocket upgrade middleware to check origin before connection
+app.use('/ws', (req, res, next) => {
+  const origin = req.headers.origin || req.headers.referer || 'unknown';
+  
+  if (!isOriginAllowed(origin)) {
+    console.log(`[Security] Blocked WebSocket upgrade from unauthorized origin: ${origin}`);
+    res.status(403).json({ error: 'Unauthorized origin' });
+    return;
+  }
+  
+  next();
+});
+
+// Create HTTP/HTTPS server and WebSocket server
+const server = sslOptions ? 
+  https.createServer(sslOptions, app) : 
+  http.createServer(app);
+
+const wss = new WebSocket.Server({ 
+  server,
+  verifyClient: (info) => {
+    const origin = info.origin;
+    
+    if (!isOriginAllowed(origin)) {
+      console.log(`[Security] Rejected WebSocket connection from unauthorized origin: ${origin}`);
+      return false;
+    }
+    
+    return true;
+  }
+});
 
 // Cleanup old IP requests periodically (every 5 minutes)
 setInterval(() => {
@@ -143,6 +254,10 @@ wss.on('connection', (ws, req) => {
   let currentRoom = null;
   const clientId = Math.random().toString(36).substr(2, 9); // Unique ID for this client
   const clientIp = req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+  const origin = req.headers.origin || req.headers.referer || 'unknown';
+
+  // Log new connection for security monitoring
+  console.log(`[Security] New WebSocket connection from ${clientIp}, origin: ${origin}`);
 
   // Send server clientId to client immediately
   ws.send(JSON.stringify({
@@ -160,6 +275,13 @@ wss.on('connection', (ws, req) => {
   
   ws.on('message', (message) => {
     try {
+      // Security: Validate message size (prevent DoS)
+      if (message.length > 10000) { // 10KB limit
+        console.log(`[Security] Message too large from ${clientId}: ${message.length} bytes`);
+        ws.close(1009, 'Message too large');
+        return;
+      }
+
       // Check message rate limit
       const now = Date.now();
       if (!wsMessageTimestamps.has(clientId)) {
@@ -180,6 +302,23 @@ wss.on('connection', (ws, req) => {
 
       const data = JSON.parse(message);
 
+      // Security: Validate message structure
+      if (!data || typeof data !== 'object') {
+        console.log(`[Security] Invalid message format from ${clientId}`);
+        ws.close(1003, 'Invalid message format');
+        return;
+      }
+
+      // Security: Sanitize message content
+      if (data.message && typeof data.message === 'string') {
+        // Remove potentially dangerous content
+        data.message = data.message
+          .substring(0, 2000) // Length limit
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove scripts
+          .replace(/javascript:/gi, '') // Remove javascript URLs
+          .trim();
+      }
+
       switch (data.type) {
         case 'get_stats':
           // Send current stats to requesting client
@@ -190,55 +329,61 @@ wss.on('connection', (ws, req) => {
           break;
 
         case 'join':
-          if (data.roomHash && isValidHash(data.roomHash)) {
-            // Leave current room if any
-            if (currentRoom) {
-              const oldRoom = rooms.get(currentRoom);
-              if (oldRoom) {
-                oldRoom.delete(ws);
-                if (oldRoom.size === 0) {
-                  rooms.delete(currentRoom);
-                } else {
-                  // Notify others about participant count change
-                  broadcastToRoom(currentRoom, {
-                    type: 'participant_count',
-                    count: oldRoom.size
-                  }, ws);
-                }
+          // Security: Validate roomHash
+          if (!data.roomHash || typeof data.roomHash !== 'string' || data.roomHash.length > 100) {
+            console.log(`[Security] Invalid roomHash from ${clientId}:`, data.roomHash);
+            ws.close(1003, 'Invalid room hash');
+            return;
+          }
+
+          const roomHash = data.roomHash.replace(/[^a-zA-Z0-9_-]/g, ''); // Sanitize room hash
+          
+          if (currentRoom) {
+            // Leave current room
+            const oldRoom = rooms.get(currentRoom);
+            if (oldRoom) {
+              oldRoom.delete(ws);
+              if (oldRoom.size === 0) {
+                rooms.delete(currentRoom);
+              } else {
+                // Notify others about participant count change
+                broadcastToRoom(currentRoom, {
+                  type: 'participant_count',
+                  count: oldRoom.size
+                });
               }
             }
-
-            // Join new room (automatically creates if doesn't exist)
-            currentRoom = data.roomHash;
-            if (!rooms.has(currentRoom)) {
-              rooms.set(currentRoom, new Set());
-            }
-            rooms.get(currentRoom).add(ws);
-
-            // Send current participant count to new user
-            ws.send(JSON.stringify({
-              type: 'participant_count',
-              count: rooms.get(currentRoom).size
-            }));
-
-            // Notify others about new participant
-            broadcastToRoom(currentRoom, {
-              type: 'participant_count',
-              count: rooms.get(currentRoom).size
-            }, ws);
-
-            // Broadcast connection message to others in the room
-            broadcastToRoom(currentRoom, {
-              type: 'message',
-              message: 'connected',
-              timestamp: Date.now(),
-              clientId: clientId,
-              isSystem: true
-            }, ws);
-
-            // Broadcast updated stats to all clients
-            broadcastStats();
           }
+
+          currentRoom = roomHash;
+          if (!rooms.has(currentRoom)) {
+            rooms.set(currentRoom, new Set());
+          }
+          rooms.get(currentRoom).add(ws);
+
+          // Send current room info to client
+          ws.send(JSON.stringify({
+            type: 'room_joined',
+            roomHash: currentRoom,
+            participantCount: rooms.get(currentRoom).size
+          }));
+
+          // Notify others about new participant
+          broadcastToRoom(currentRoom, {
+            type: 'participant_count',
+            count: rooms.get(currentRoom).size
+          }, ws);
+
+          // Broadcast connected message to others in the room
+          broadcastToRoom(currentRoom, {
+            type: 'message',
+            message: 'connected',
+            timestamp: Date.now(),
+            clientId: clientId,
+            isSystem: true
+          }, ws);
+
+          console.log(`[Security] Client ${clientId} joined room ${roomHash}`);
           break;
 
         case 'message':
@@ -317,7 +462,7 @@ wss.on('connection', (ws, req) => {
     
     // Clean up message timestamps
     wsMessageTimestamps.delete(clientId);
-    console.log(`[WS] Disconnected from ${clientIp}`);
+    console.log(`[Security] Client ${clientId} disconnected from ${clientIp}`);
 
     // Remove from current room
     if (currentRoom) {
@@ -341,6 +486,8 @@ wss.on('connection', (ws, req) => {
             clientId: clientId,
             isSystem: true
           });
+
+          console.log(`[Security] Client ${clientId} left room ${currentRoom}`);
         }
       }
 
@@ -401,61 +548,42 @@ app.get('*', (req, res) => {
 // Get local IP address for network access
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
+  console.log(`[DEBUG] Available network interfaces:`, interfaces);
+  
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       // Skip internal and non-IPv4 addresses
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        console.log(`[DEBUG] Found IPv4: ${name} -> ${iface.address}`);
       }
     }
   }
   return 'localhost';
 }
 
-// SSL certificates for HTTPS/WSS (let's encrypt via certbot)
-let sslOptions = null;
-const USE_SSL = true; // Включаем SSL для работы через CloudFlare
-
-if (process.env.NODE_ENV === 'production' && USE_SSL) {
-  try {
-    const now = new Date();
-    const timestamp = now.toISOString();
-    const localTime = now.toLocaleString();
-    
-    sslOptions = {
-      key: fs.readFileSync('/etc/letsencrypt/live/freessenger.com/privkey.pem'),
-      cert: fs.readFileSync('/etc/letsencrypt/live/freessenger.com/fullchain.pem')
-    };
-    
-    console.log('\n' + '='.repeat(50));
-    console.log(`🔐 SSL CERTIFICATES LOADED`);
-    console.log(`📅 Date: ${localTime}`);
-    console.log(`⏰ Time: ${timestamp}`);
-    console.log(`📁 Key: /etc/letsencrypt/live/freessenger.com/privkey.pem`);
-    console.log(`📄 Cert: /etc/letsencrypt/live/freessenger.com/fullchain.pem`);
-    console.log('='.repeat(50) + '\n');
-  } catch (error) {
-    console.log('\n' + '='.repeat(50));
-    console.log(`❌ SSL CERTIFICATES NOT FOUND`);
-    console.log(`📅 Date: ${new Date().toLocaleString()}`);
-    console.log(`⏰ Time: ${new Date().toISOString()}`);
-    console.log(`🔍 Error: ${error.message}`);
-    console.log(`💡 Run: certbot --nginx -d freessenger.com -d www.freessenger.com`);
-    console.log(`🔄 Falling back to HTTP mode`);
-    console.log('='.repeat(50) + '\n');
-    sslOptions = null;
-  }
-}
-
 server.listen(PORT, '0.0.0.0', () => {
+  const now = new Date();
+  const timestamp = now.toISOString();
+  const localTime = now.toLocaleString();
+  
+  console.log('\n' + '='.repeat(50));
+  console.log(`🚀 FRESENGER SERVER STARTED`);
+  console.log(`📅 Date: ${localTime}`);
+  console.log(`⏰ Time: ${timestamp}`);
+  console.log('='.repeat(50) + '\n');
+  
   if (process.env.NODE_ENV === 'production') {
-    // Production - just show it's listening
-    console.log(`\nServer running on port ${PORT}`);
-    console.log(`WebSocket server running on same port\n`);
+    // Production - show HTTPS/WSS is running
+    console.log(`🔒 HTTPS server running on port ${PORT}`);
+    console.log(`🔒 WSS server running on same port`);
+    console.log(`🌐 Access at: https://freessenger.com`);
   } else {
     // Development - show local IP
     const localIP = getLocalIP();
-    console.log(`\nServer running on http://${localIP}:${PORT}`);
-    console.log(`WebSocket server running on same port\n`);
+    console.log(`🌐 HTTP server running on http://${localIP}:${PORT}`);
+    console.log(`🔌 WS server running on same port`);
   }
+  
+  console.log('\n' + '='.repeat(50));
 });
+

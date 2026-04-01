@@ -20,8 +20,11 @@ class WebSocketManager {
       return;
     }
 
+    // Determine WebSocket protocol based on current page protocol
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    
+    console.log(`Connecting to WebSocket at: ${wsUrl}`);
     
     this.ws = new WebSocket(wsUrl);
 
