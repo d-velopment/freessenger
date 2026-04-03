@@ -4,9 +4,9 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [sveltekit()],
 	build: {
-		// Оптимизация для bundle
-		minify: 'esbuild',
-		sourcemap: false,
+		// Убираем обфускацию для дебага
+		minify: false,
+		sourcemap: true,
 		rollupOptions: {
 			output: {
 				// Принудительно создаем один чанк

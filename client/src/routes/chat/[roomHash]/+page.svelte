@@ -4,6 +4,8 @@
   import { goto } from "$app/navigation";
   import { wsManager } from "$lib/websocket.js";
   import ThemeToggle from "$lib/ThemeToggle.svelte";
+  import FileUpload from "$lib/components/FileUpload.svelte";
+  import { fileUploadManager } from "$lib/fileUpload.js";
   import { fly } from "svelte/transition";
 
   let messages = [];
@@ -18,6 +20,8 @@
   let isRateLimited = false;
   let isEditing = false;
   let warningMessage = "⚠️ Slow down! Too many actions.";
+  let showFileUpload = false;
+  let uploadedFiles = [];
 
   const roomHash = $page.params.roomHash;
 
@@ -377,8 +381,11 @@
 
     // Set up WebSocket event handlers
     wsManager.on("message", (data) => {
+      console.log('[WebSocket] Received message:', data);
+      
       // Ignore messages from ourselves (we already added them locally)
       if (data.clientId === wsManager.clientId) {
+        console.log('[WebSocket] Ignoring own message');
         return;
       }
 
@@ -392,9 +399,43 @@
         return;
       }
 
-      // Mark as other person's message
-      data.isOwn = false;
-      messages = [...messages, data];
+      // Проверяем, является ли сообщение JSON с файловыми данными
+      let messageData;
+      try {
+        // Пытаемся распарсить сообщение как JSON
+        const parsedData = JSON.parse(data.message);
+        console.log('[WebSocket] Parsed JSON message:', parsedData);
+        
+        // Если это файловое сообщение
+        if (parsedData.type === 'file' && parsedData.fileUrl) {
+          messageData = {
+            type: 'file',
+            fileUrl: parsedData.fileUrl,
+            fileName: parsedData.fileName,
+            fileSize: parsedData.fileSize,
+            fileType: parsedData.fileType,
+            timestamp: parsedData.timestamp || data.timestamp,
+            clientId: data.clientId,
+            isOwn: false
+          };
+          console.log('[WebSocket] File message from other user:', messageData);
+        } else {
+          // Если JSON но не файл, используем как обычное сообщение
+          messageData = {
+            ...data,
+            isOwn: false
+          };
+        }
+      } catch (e) {
+        // Если не JSON, используем как обычное текстовое сообщение
+        messageData = {
+          ...data,
+          isOwn: false
+        };
+      }
+
+      console.log('[WebSocket] Adding message to chat:', messageData);
+      messages = [...messages, messageData];
       scrollToBottom();
     });
 
@@ -457,11 +498,142 @@
 
   // Проверка на смайлики
   function isEmojiOnly(text) {
-    // Проверяем на обычные символы (буквы, цифры, пробелы, знаки препинания)
-    const hasNormalChars = /[a-zA-Zа-яА-ЯёЁ0-9\s.,!?;:()'"@#$%&*+\-\/=<>]/.test(text);
+    // Проверяем что текст существует и является строкой
+    if (!text || typeof text !== 'string') {
+      return false;
+    }
     
-    // Если нет обычных символов и текст не пустой - считаем эмодзи/смайлики
-    return !hasNormalChars && text.length > 0;
+    // Проверяем на основные смайлики
+    const hasSimpleEmoji = text.includes(':)') || text.includes(':(') || text.includes(':D') || text.includes(':P') || text.includes(':O');
+    
+    // Проверяем на Unicode эмодзи (простые диапазоны)
+    const hasUnicodeEmoji = /[😀-🿿]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(text);
+    
+    return hasSimpleEmoji || hasUnicodeEmoji;
+  }
+
+  // Обработчик загрузки файла
+  function handleFileUpload(event) {
+    const { file, fileInfo } = event.detail;
+    
+    // Добавляем файл в список загруженных
+    uploadedFiles = [...uploadedFiles, fileInfo];
+    
+    // Отправляем сообщение с файлом в чат
+    const messageData = {
+      type: 'file',
+      fileUrl: file.url,
+      fileName: file.originalName,
+      fileSize: file.size,
+      fileType: file.mimetype,
+      timestamp: file.uploadTime,
+      clientId: wsManager.clientId,
+      isOwn: true,
+    };
+
+    messages = [...messages, messageData];
+    scrollToBottom();
+    
+    // Отправляем через WebSocket
+    wsManager.sendMessage(JSON.stringify(messageData));
+    
+    // Закрываем панель загрузки
+    showFileUpload = false;
+  }
+
+  // Обработчик удаления файла
+  function handleFileRemove(event) {
+    const { fileInfo } = event.detail;
+    
+    // Удаляем из списка
+    uploadedFiles = uploadedFiles.filter(f => f !== fileInfo);
+  }
+
+  // Обработчик клавиатурных событий
+  function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  }
+
+  // Прямая загрузка файла
+  async function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Получаем кнопку и сохраняем оригинальное состояние заранее
+    const uploadBtn = document.querySelector('.file-upload-btn');
+    const originalContent = uploadBtn ? uploadBtn.innerHTML : '📎';
+
+    try {
+      // Проверяем размер файла
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File too large. Maximum size is 10MB.');
+        return;
+      }
+
+      // Проверяем тип файла
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        alert('Invalid file type. Only images and videos are allowed.');
+        return;
+      }
+
+      // Показываем индикатор загрузки
+      if (uploadBtn) {
+        uploadBtn.innerHTML = '⏳';
+        uploadBtn.disabled = true;
+      }
+
+      // Загружаем файл
+      const result = await fileUploadManager.uploadFile(file, (progress) => {
+        console.log(`Upload progress: ${progress}%`);
+      });
+
+      if (result.success) {
+        // Отправляем сообщение с файлом в чат
+        const messageData = {
+          type: 'file',
+          fileUrl: result.file.url,
+          fileName: result.file.originalName,
+          fileSize: result.file.size,
+          fileType: result.file.mimetype,
+          timestamp: result.file.uploadTime,
+          clientId: wsManager.clientId,
+          isOwn: true,
+        };
+
+        messages = [...messages, messageData];
+        scrollToBottom();
+        
+        // Отправляем через WebSocket как JSON внутри текстового сообщения
+        const fileMessage = {
+          type: 'file',
+          fileUrl: result.file.url,
+          fileName: result.file.originalName,
+          fileSize: result.file.size,
+          fileType: result.file.mimetype
+        };
+        
+        console.log('[Client] Sending file message:', fileMessage);
+        wsManager.sendMessage(JSON.stringify(fileMessage));
+        
+        console.log('File uploaded successfully:', result.file);
+      }
+
+    } catch (error) {
+      console.error('File upload error:', error);
+      alert('Upload failed: ' + error.message);
+    } finally {
+      // Восстанавливаем кнопку
+      if (uploadBtn) {
+        uploadBtn.innerHTML = originalContent;
+        uploadBtn.disabled = false;
+      }
+      
+      // Очищаем input
+      event.target.value = '';
+    }
   }
 
   function sendMessage() {
@@ -555,6 +727,90 @@
   function goHome() {
     goto("/");
   }
+
+  // Функции для работы с файлами
+  function openImageFullscreen(imageUrl) {
+    // Извлекаем имя файла из URL для заголовка
+    const fileName = imageUrl.split('/').pop() || 'Image';
+    // Создаем модальное окно для изображения
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      cursor: pointer;
+    `;
+    
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.alt = fileName;
+    img.style.cssText = `
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    `;
+    
+    modal.appendChild(img);
+    document.body.appendChild(modal);
+    
+    // Закрытие по клику
+    modal.onclick = () => {
+      document.body.removeChild(modal);
+    };
+    
+    // Закрытие по ESC
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(modal);
+        document.removeEventListener('keydown', handleEsc);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+  }
+
+  function downloadFile(fileUrl, fileName) {
+    // Создаем временную ссылку для скачивания
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function getFileIcon(mimeType) {
+    if (mimeType.startsWith('video/')) {
+      return '🎥';
+    } else if (mimeType.includes('pdf')) {
+      return '📄';
+    } else if (mimeType.includes('zip') || mimeType.includes('rar')) {
+      return '📦';
+    } else if (mimeType.includes('audio/')) {
+      return '🎵';
+    } else {
+      return '📎'; // По умолчанию
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
 </script>
 
 <div class="chat-container">
@@ -626,11 +882,42 @@
           </div>
         {/if}
         <div class="message-body">
-          <span
-            class="message-content"
-            class:emoji-only={isEmojiOnly(message.message)}
-            >{message.message}</span
-          >
+          {#if message.type === 'file'}
+            <div class="file-message">
+              {#if message.fileType.startsWith('image/')}
+                <!-- Изображение - только превью без деталей -->
+                <img 
+                  src={message.fileUrl} 
+                  alt="Image"
+                  class="file-preview"
+                  on:click={() => openImageFullscreen(message.fileUrl)}
+                  title="Click to open in fullscreen"
+                />
+              {:else}
+                <!-- Другие файлы - иконка с деталями -->
+                <div 
+                  class="file-download"
+                  on:click={() => downloadFile(message.fileUrl, message.fileName)}
+                  title="Click to download"
+                >
+                  <div class="file-icon">
+                    {getFileIcon(message.fileType)}
+                  </div>
+                  <div class="file-info">
+                    <span class="file-name">{message.fileName || message.fileUrl.split('/').pop()}</span>
+                    <span class="file-size">{formatFileSize(message.fileSize)}</span>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <!-- Обычное текстовое сообщение -->
+            <span
+              class="message-content"
+              class:emoji-only={isEmojiOnly(message.message)}
+              >{message.message}</span
+            >
+          {/if}
           <span class="message-time">{formatTime(message.timestamp)}</span>
         </div>
       </div>
@@ -660,37 +947,36 @@
 
   <div class="message-input">
     <div class="message-input-row">
+      <input
+        type="file"
+        id="file-upload"
+        accept="image/*,video/*"
+        style="display: none;"
+        on:change={handleFileSelect}
+        disabled={isRateLimited}
+      />
+      <button 
+        class="file-upload-btn" 
+        on:click={() => document.getElementById('file-upload').click()}
+        title="Upload file"
+        disabled={isRateLimited}
+      >
+        📎
+      </button>
       <textarea
         bind:value={newMessage}
-        placeholder="Type your message (max 2000 characters)..."
-        on:focus={onInputFocus}
-        on:blur={onInputBlur}
-        on:keypress={handleKeyPress}
-        on:input={handleInput}
-        maxlength="2000"
-        rows="1"
+        on:keydown={handleKeyDown}
+        placeholder="Type a message..."
+        class="message-textarea"
         disabled={isRateLimited}
       ></textarea>
-      <!-- svelte-ignore a11y_consider_explicit_label -->
-      <button
-        class="send-btn"
+      <button 
+        class="send-button" 
         on:click={sendMessage}
         disabled={!newMessage.trim() || isRateLimited}
+        title="Send message"
       >
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="transform: rotate(45deg) translate(-2px, 2px);"
-        >
-          <line x1="22" y1="2" x2="11" y2="13"></line>
-          <polygon points="22 2 15 22 11 13 2 9"></polygon>
-        </svg>
+        {isRateLimited ? "⏳" : "➤"}
       </button>
     </div>
   </div>
@@ -889,6 +1175,104 @@
     line-height: 1.2;
   }
 
+  /* Стили для файлов в сообщениях */
+  .file-message {
+    margin: 8px 0;
+  }
+
+  .file-preview {
+    width: 10em;
+    height: 10em;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+
+  .file-preview:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+
+  .file-download-simple {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 10em;
+    height: 10em;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .file-download-simple:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .file-icon-large {
+    font-size: 4em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .file-download {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    max-width: 300px;
+  }
+
+  .file-download:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .file-icon {
+    font-size: 2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .file-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-name {
+    display: block;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+  }
+
+  .file-size {
+    display: block;
+    font-size: 0.875em;
+    color: #666;
+  }
+
   .message-time {
     font-size: 0.8125rem;
     font-weight: 300;
@@ -1036,28 +1420,27 @@
     opacity: 0.6;
   }
 
-  .send-btn {
-    background-color: #007bff;
-    border: none;
-    padding: 8px;
-    border-radius: 50%;
-    cursor: pointer;
+  .message-input .send-button {
+    background: #007bff;
     color: white;
-    margin-left: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    aspect-ratio: 1 / 1;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    margin-left: 10px;
+    transition: all 0.3s ease;
+    font-size: 16px;
   }
 
-  .send-btn:hover:not(:disabled) {
-    background-color: #0056b3;
+  .message-input .send-button:hover:not(:disabled) {
+    background: #0056b3;
+    transform: scale(1.05);
   }
 
-  .send-btn:disabled {
-    background-color: #ccc;
+  .message-input .send-button:disabled {
+    background: #6c757d;
     cursor: not-allowed;
+    transform: scale(1);
   }
 
   @media (max-width: 768px) {
@@ -1078,13 +1461,74 @@
       width: 100%;
     }
 
-    .send-btn {
+    .message-input .send-button {
       padding: 6px;
     }
 
-    .send-btn svg {
+    .message-input .send-button svg {
       width: 16px;
       height: 16px;
+    }
+
+    .message-input .file-upload-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 10px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      margin-right: 10px;
+      transition: all 0.3s ease;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      height: 44px;
+    }
+
+    .message-input .file-upload-btn:hover:not(:disabled) {
+      background: #218838;
+      transform: scale(1.05);
+    }
+
+    .message-input .file-upload-btn:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+      transform: scale(1);
+    }
+
+    .file-upload-panel {
+      position: relative;
+      margin-top: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .close-upload-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    .close-upload-panel:hover {
+      background: #c82333;
+      transform: scale(1.1);
     }
   }
 </style>

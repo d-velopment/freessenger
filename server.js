@@ -7,11 +7,97 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const os = require('os');
+const multer = require('multer');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
 const MAX_WS_CONNECTIONS_PER_IP = 10;
 const MAX_WS_MESSAGES_PER_SECOND = 5;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const FILE_CLEANUP_TIME = 60 * 1000; // 60 секунд
+
+// Создаем папку для загрузок
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Хранилище загруженных файлов с таймерами
+const uploadedFiles = new Map(); // filename -> { path, cleanupTimer }
+
+// Multer конфигурация для загрузки файлов
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    // Генерируем уникальное имя файла
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: 1 // Максимум 1 файл за раз
+  },
+  fileFilter: (req, file, cb) => {
+    // Разрешаем только изображения и видео
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+      'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images and videos are allowed.'), false);
+    }
+  }
+});
+
+// Функция для удаления файла через указанное время
+function scheduleFileDeletion(filename, filePath) {
+  const cleanupTimer = setTimeout(() => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`[FileCleanup] Deleted file: ${filename}`);
+      }
+      uploadedFiles.delete(filename);
+    } catch (error) {
+      console.error(`[FileCleanup] Error deleting file ${filename}:`, error);
+    }
+  }, FILE_CLEANUP_TIME);
+  
+  return cleanupTimer;
+}
+
+// Функция для немедленного удаления файла
+function deleteFile(filename) {
+  const fileInfo = uploadedFiles.get(filename);
+  if (fileInfo) {
+    // Отменяем таймер автоудаления
+    if (fileInfo.cleanupTimer) {
+      clearTimeout(fileInfo.cleanupTimer);
+    }
+    
+    // Удаляем файл
+    try {
+      if (fs.existsSync(fileInfo.path)) {
+        fs.unlinkSync(fileInfo.path);
+        console.log(`[FileCleanup] Manually deleted file: ${filename}`);
+      }
+    } catch (error) {
+      console.error(`[FileCleanup] Error manually deleting file ${filename}:`, error);
+    }
+    
+    uploadedFiles.delete(filename);
+  }
+}
 
 // --------------------------------------------------------------
 
@@ -54,9 +140,10 @@ const requestTimestamps = new Map();
 
 // Security: Check origin for all HTTP requests (after static files)
 app.use((req, res, next) => {
-  // Skip origin check for static resources, health checks and OPTIONS requests
-  const isStaticResource = req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i);
-  if (req.method === 'OPTIONS' || req.path === '/health' || isStaticResource) {
+  // Skip origin check for static resources, uploads, health checks and OPTIONS requests
+  const isStaticResource = req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|mp4|webm|ogg|mov|heic|heif)$/i);
+  const isUploadsPath = req.path.startsWith('/uploads/');
+  if (req.method === 'OPTIONS' || req.path === '/health' || isStaticResource || isUploadsPath) {
     console.log(`[DEBUG] Skipping origin check for: ${req.path}`);
     return next();
   }
@@ -101,8 +188,112 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from client directory
-app.use(express.static(path.join(__dirname, 'client/dist')));
+// Serve static files from client directory FIRST (before origin check)
+app.use(express.static(path.join(__dirname, 'client/dist'), {
+  maxAge: '1y',
+  etag: true,
+  lastModified: true
+}));
+
+// Serve uploaded files
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '1m', // Короткое время кеширования для загруженных файлов
+  etag: true,
+  lastModified: true
+}));
+
+// Handle root path - serve index.html
+app.get('/', (req, res) => {
+  console.log(`[DEBUG] Serving index.html for: ${req.headers.host}`);
+  console.log(`[DEBUG] Request headers:`, req.headers);
+  
+  res.on('finish', () => {
+    console.log(`[DEBUG] Response sent successfully for: ${req.headers.host}`);
+  });
+  
+  res.on('error', (error) => {
+    console.log(`[DEBUG] Response error for: ${req.headers.host}`, error);
+  });
+  
+  res.sendFile(path.join(__dirname, 'client/dist', 'index.html'));
+});
+
+// File upload route
+app.post('/upload', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // Проверяем что файл действительно сохранен и имеет размер
+    const fs = require('fs');
+    const stats = fs.statSync(req.file.path);
+    console.log(`[FileUpload] Saved file stats: ${req.file.filename}, size: ${stats.size} bytes, mimetype: ${req.file.mimetype}`);
+    
+    if (stats.size === 0) {
+      console.error(`[FileUpload] ERROR: File saved with 0 bytes: ${req.file.filename}`);
+      return res.status(500).json({ error: 'File upload failed - 0 bytes saved' });
+    }
+    
+    const fileInfo = {
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: stats.size, // Используем реальный размер с диска
+      mimetype: req.file.mimetype,
+      path: req.file.path,
+      url: `/uploads/${req.file.filename}`,
+      uploadTime: Date.now(),
+      willBeDeletedAt: Date.now() + FILE_CLEANUP_TIME
+    };
+    
+    // Запланируем автоудаление файла
+    const cleanupTimer = scheduleFileDeletion(req.file.filename, req.file.path);
+    
+    // Сохраним информацию о файле
+    uploadedFiles.set(req.file.filename, {
+      path: req.file.path,
+      cleanupTimer: cleanupTimer,
+      info: fileInfo
+    });
+    
+    console.log(`[FileUpload] Uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+    
+    res.json({
+      success: true,
+      file: fileInfo
+    });
+    
+  } catch (error) {
+    console.error('[FileUpload] Error:', error);
+    res.status(500).json({ error: 'File upload failed' });
+  }
+});
+
+// Manual file deletion route
+app.delete('/upload/:filename', (req, res) => {
+  const filename = req.params.filename;
+  deleteFile(filename);
+  
+  res.json({
+    success: true,
+    message: 'File deleted successfully'
+  });
+});
+
+// Get file info route
+app.get('/upload/:filename/info', (req, res) => {
+  const filename = req.params.filename;
+  const fileInfo = uploadedFiles.get(filename);
+  
+  if (!fileInfo) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  
+  res.json({
+    success: true,
+    file: fileInfo.info
+  });
+});
 
 // Create HTTP server and WebSocket server
 const server = http.createServer(app);
@@ -194,6 +385,8 @@ wss.on('connection', (ws, req) => {
   
   ws.on('message', (message) => {
     try {
+      console.log(`[WebSocket] Received raw message from ${clientId}:`, message.toString());
+      
       // Check message rate limit
       const now = Date.now();
       if (!wsMessageTimestamps.has(clientId)) {
@@ -213,6 +406,7 @@ wss.on('connection', (ws, req) => {
       wsMessageTimestamps.set(clientId, recentMessages);
 
       const data = JSON.parse(message);
+      console.log(`[WebSocket] Parsed message from ${clientId}:`, data);
 
       switch (data.type) {
         case 'get_stats':
@@ -411,11 +605,22 @@ function broadcastToRoom(roomHash, data, excludeWs = null) {
   const room = rooms.get(roomHash);
   if (room) {
     const message = JSON.stringify(data);
+    let sentCount = 0;
+    console.log(`[Broadcast] Room ${roomHash} has ${room.size} clients, sending:`, data);
     room.forEach(client => {
       if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
         client.send(message);
+        sentCount++;
+        console.log(`[Broadcast] Sent message to client (readyState: ${client.readyState})`);
+      } else if (client === excludeWs) {
+        console.log(`[Broadcast] Skipped sender (excludeWs)`);
+      } else {
+        console.log(`[Broadcast] Skipped client (readyState: ${client.readyState})`);
       }
     });
+    console.log(`[Broadcast] Sent to ${sentCount} clients`);
+  } else {
+    console.log(`[Broadcast] Room ${roomHash} not found!`);
   }
 }
 
@@ -435,6 +640,48 @@ setInterval(() => {
 // Serve the main page for all routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/dist/index.html'));
+});
+
+// Handle errors gracefully
+process.on('uncaughtException', (error) => {
+  console.error('[ERROR] Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[ERROR] Unhandled Rejection:', reason);
+});
+
+// Express error handling
+app.use((error, req, res, next) => {
+  console.error('[ERROR] Express Error:', error);
+  console.error('[ERROR] Request URL:', req.url);
+  console.error('[ERROR] Request headers:', req.headers);
+  
+  if (!res.headersSent) {
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : error.message
+    });
+  }
+});
+
+// Multer error handling
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large. Maximum size is 10MB.' });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(413).json({ error: 'Too many files. Maximum is 1 file.' });
+    }
+    return res.status(400).json({ error: 'File upload error: ' + error.message });
+  }
+  
+  if (error.message.includes('Invalid file type')) {
+    return res.status(400).json({ error: error.message });
+  }
+  
+  next(error);
 });
 
 // Get local IP address for network access
