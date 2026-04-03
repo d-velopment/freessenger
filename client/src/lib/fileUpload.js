@@ -4,10 +4,7 @@ class FileUploadManager {
   constructor() {
     this.uploadUrl = '/upload';
     this.maxFileSize = 10 * 1024 * 1024; // 10MB
-    this.allowedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-      'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'
-    ];
+    // Разрешаем все файлы
   }
 
   // Загрузка файла
@@ -16,11 +13,6 @@ class FileUploadManager {
       // Проверяем размер файла
       if (file.size > this.maxFileSize) {
         throw new Error('File too large. Maximum size is 10MB.');
-      }
-
-      // Проверяем тип файла
-      if (!this.allowedTypes.includes(file.type)) {
-        throw new Error('Invalid file type. Only images and videos are allowed.');
       }
 
       // Создаем FormData

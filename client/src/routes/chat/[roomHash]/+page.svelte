@@ -416,9 +416,18 @@
             fileType: parsedData.fileType,
             timestamp: parsedData.timestamp || data.timestamp,
             clientId: data.clientId,
-            isOwn: false
+            isOwn: false,
+            fileDisabled: false
           };
           console.log('[WebSocket] File message from other user:', messageData);
+          
+          // Устанавливаем таймер для отключения скачивания через 60 секунд (для видео и других файлов)
+          if (!parsedData.fileType.startsWith('image/')) {
+            setTimeout(() => {
+              messageData.fileDisabled = true;
+              messages = [...messages]; // Обновляем массив для реактивности
+            }, 60000);
+          }
         } else {
           // Если JSON но не файл, используем как обычное сообщение
           messageData = {
@@ -573,12 +582,6 @@
         return;
       }
 
-      // Проверяем тип файла
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        alert('Invalid file type. Only images and videos are allowed.');
-        return;
-      }
-
       // Показываем индикатор загрузки
       if (uploadBtn) {
         uploadBtn.innerHTML = '⏳';
@@ -601,10 +604,19 @@
           timestamp: result.file.uploadTime,
           clientId: wsManager.clientId,
           isOwn: true,
+          fileDisabled: false
         };
 
         messages = [...messages, messageData];
         scrollToBottom();
+        
+        // Устанавливаем таймер для отключения скачивания через 60 секунд (для видео и других файлов)
+        if (!result.file.mimetype.startsWith('image/')) {
+          setTimeout(() => {
+            messageData.fileDisabled = true;
+            messages = [...messages]; // Обновляем массив для реактивности
+          }, 60000);
+        }
         
         // Отправляем через WebSocket как JSON внутри текстового сообщения
         const fileMessage = {
@@ -740,7 +752,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.9);
+      background: rgba(0,0,0,0.7);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -755,8 +767,8 @@
       max-width: 90%;
       max-height: 90%;
       object-fit: contain;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      border-radius: 1em;
+      box-shadow: 0 1em 2em 1em rgba(0,0,0,0.5);
     `;
     
     modal.appendChild(img);
@@ -884,31 +896,56 @@
         <div class="message-body">
           {#if message.type === 'file'}
             <div class="file-message">
-              {#if message.fileType.startsWith('image/')}
-                <!-- Изображение - только превью без деталей -->
-                <img 
-                  src={message.fileUrl} 
-                  alt="Image"
-                  class="file-preview"
-                  on:click={() => openImageFullscreen(message.fileUrl)}
-                  title="Click to open in fullscreen"
-                />
-              {:else}
-                <!-- Другие файлы - иконка с деталями -->
-                <div 
-                  class="file-download"
-                  on:click={() => downloadFile(message.fileUrl, message.fileName)}
-                  title="Click to download"
-                >
-                  <div class="file-icon">
-                    {getFileIcon(message.fileType)}
+              <div class="file-container">
+                {#if message.fileType.startsWith('image/')}
+                  <!-- Изображение - только превью без деталей -->
+                  <img 
+                    src={message.fileUrl} 
+                    alt="Image"
+                    class="file-preview"
+                    on:click={() => openImageFullscreen(message.fileUrl)}
+                    title="{message.fileName}"
+                  />
+                {:else if message.fileType.startsWith('video/')}
+                  <!-- Видео - превью с preload="metadata" -->
+                  <div class="video-container">
+                    <video 
+                      src={message.fileUrl}
+                      class="file-preview"
+                      class:file-disabled={message.fileDisabled}
+                      preload="metadata"
+                      controls={!message.fileDisabled}
+                      title="{message.fileDisabled ? 'File has been deleted' : message.fileName}"
+                    />
+                    
+                    <!-- Индикатор удаления файла -->
+                    <div class="file-deletion-overlay" class:overlay-disabled={message.fileDisabled}>
+                      <img src="/assets/broken.png" alt="File has been deleted" class="broken-glass" />
+                    </div>
                   </div>
-                  <div class="file-info">
-                    <span class="file-name">{message.fileName || message.fileUrl.split('/').pop()}</span>
-                    <span class="file-size">{formatFileSize(message.fileSize)}</span>
+                {:else}
+                  <!-- Другие файлы - иконка с деталями -->
+                  <div 
+                    class="file-download"
+                    class:file-disabled={message.fileDisabled}
+                    on:click={() => !message.fileDisabled && downloadFile(message.fileUrl, message.fileName)}
+                    title="{message.fileDisabled ? 'File has been deleted' : message.fileName}"
+                  >
+                    <div class="file-icon">
+                      {getFileIcon(message.fileType)}
+                    </div>
+                    <div class="file-info">
+                      <span class="file-name">{message.fileName || message.fileUrl.split('/').pop()}</span>
+                      <span class="file-size">{formatFileSize(message.fileSize)}</span>
+                    </div>
                   </div>
-                </div>
-              {/if}
+                  
+                  <!-- Индикатор удаления файла -->
+                  <div class="file-deletion-overlay" class:overlay-disabled={message.fileDisabled}>
+                    <img src="/assets/broken.png" alt="File has been deleted" class="broken-glass" />
+                  </div>
+                {/if}
+              </div>
             </div>
           {:else}
             <!-- Обычное текстовое сообщение -->
@@ -918,7 +955,9 @@
               >{message.message}</span
             >
           {/if}
-          <span class="message-time">{formatTime(message.timestamp)}</span>
+          {#if message.type !== 'file'}
+            <span class="message-time">{formatTime(message.timestamp)}</span>
+          {/if}
         </div>
       </div>
     {/each}
@@ -950,13 +989,13 @@
       <input
         type="file"
         id="file-upload"
-        accept="image/*,video/*"
+        accept="*"
         style="display: none;"
         on:change={handleFileSelect}
         disabled={isRateLimited}
       />
       <button 
-        class="file-upload-btn" 
+        class="send-button file-upload-btn" 
         on:click={() => document.getElementById('file-upload').click()}
         title="Upload file"
         disabled={isRateLimited}
@@ -968,6 +1007,7 @@
         on:keydown={handleKeyDown}
         placeholder="Type a message..."
         class="message-textarea"
+        rows="1"
         disabled={isRateLimited}
       ></textarea>
       <button 
@@ -1177,17 +1217,84 @@
 
   /* Стили для файлов в сообщениях */
   .file-message {
-    margin: 8px 0;
+    padding-top: 0.3em;
+  }
+
+  .file-container {
+    position: relative;
+    display: inline-block;
+  }
+
+  .video-container {
+    position: relative;
+    display: inline-block;
+  }
+
+  .file-deletion-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 0, 0, 0.1);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    animation: fadeInDeletionOverlay 60s linear forwards;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    transition: transform 0.3s ease;
+  }
+
+  .file-deletion-overlay.overlay-disabled {
+    opacity: 1;
+    animation: none;
+    pointer-events: none;
+  }
+
+  .file-container:hover .file-deletion-overlay:not(.overlay-disabled) {
+    transform: scale(1.05);
+  }
+
+  .video-container:hover .file-deletion-overlay:not(.overlay-disabled) {
+    transform: scale(1.05);
+  }
+
+  .broken-glass {
+    width: inherit;
+    height: inherit;
+    opacity: 0.8;
+  }
+
+  .file-preview.file-disabled {
+    opacity: 0.5;
+    filter: brightness(0.5);
+    pointer-events: none;
+  }
+
+  @keyframes fadeInDeletionOverlay {
+    0% {
+      opacity: 0;
+    }
+    90% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
   }
 
   .file-preview {
-    width: 10em;
-    height: 10em;
+    display: block;
+    width: 15em;
+    height: 15em;
     object-fit: cover;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   }
 
   .file-preview:hover {
@@ -1195,40 +1302,14 @@
     box-shadow: 0 4px 16px rgba(0,0,0,0.2);
   }
 
-  .file-download-simple {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 10em;
-    height: 10em;
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  .file-download-simple:hover {
-    background: #e9ecef;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  }
-
-  .file-icon-large {
-    font-size: 4em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
   .file-download {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 12px;
-    background: #f8f9fa;
+    background: #ddd;
     border: 1px solid #e9ecef;
-    border-radius: 8px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
     max-width: 300px;
@@ -1236,8 +1317,20 @@
 
   .file-download:hover {
     background: #e9ecef;
-    transform: translateY(-2px);
+    transform: scale(1.05);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .file-download.file-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    background: #f8f9fa;
+  }
+
+  .file-download.file-disabled:hover {
+    transform: none;
+    box-shadow: none;
+    background: #f8f9fa;
   }
 
   .file-icon {
@@ -1388,6 +1481,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    gap: 0.5em;
   }
 
   .rate-limit-warning {
@@ -1404,12 +1498,10 @@
     flex: 1;
     border: 1px solid #ccc;
     border-radius: 20px;
-    padding: 12px;
+    padding: 0.6em;
     font-size: 1em;
     font-family: inherit;
     resize: none;
-    min-height: 40px;
-    max-height: 120px;
     overflow-y: auto;
   }
 
@@ -1427,7 +1519,6 @@
     padding: 10px 15px;
     border-radius: 20px;
     cursor: pointer;
-    margin-left: 10px;
     transition: all 0.3s ease;
     font-size: 16px;
   }
@@ -1465,11 +1556,6 @@
       padding: 6px;
     }
 
-    .message-input .send-button svg {
-      width: 16px;
-      height: 16px;
-    }
-
     .message-input .file-upload-btn {
       background: #28a745;
       color: white;
@@ -1496,39 +1582,6 @@
       background: #6c757d;
       cursor: not-allowed;
       transform: scale(1);
-    }
-
-    .file-upload-panel {
-      position: relative;
-      margin-top: 10px;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 15px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .close-upload-panel {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #dc3545;
-      color: white;
-      border: none;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s ease;
-    }
-
-    .close-upload-panel:hover {
-      background: #c82333;
-      transform: scale(1.1);
     }
   }
 </style>

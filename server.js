@@ -31,10 +31,10 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    // Генерируем уникальное имя файла
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    // Генерируем случайное имя файла через toString(36)
+    const randomName = Math.random().toString(36).substring(2, 18); // 16 символов
     const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+    cb(null, randomName + ext);
   }
 });
 
@@ -45,17 +45,8 @@ const upload = multer({
     files: 1 // Максимум 1 файл за раз
   },
   fileFilter: (req, file, cb) => {
-    // Разрешаем только изображения и видео
-    const allowedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-      'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'
-    ];
-    
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only images and videos are allowed.'), false);
-    }
+    // Разрешаем все файлы
+    cb(null, true);
   }
 });
 
@@ -144,7 +135,6 @@ app.use((req, res, next) => {
   const isStaticResource = req.path.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|mp4|webm|ogg|mov|heic|heif)$/i);
   const isUploadsPath = req.path.startsWith('/uploads/');
   if (req.method === 'OPTIONS' || req.path === '/health' || isStaticResource || isUploadsPath) {
-    console.log(`[DEBUG] Skipping origin check for: ${req.path}`);
     return next();
   }
   
@@ -152,7 +142,6 @@ app.use((req, res, next) => {
   
   // Allow all localhost/127.0.0.1 access without origin check
   if (!origin || origin === 'unknown') {
-    console.log(`[DEBUG] Allowing no-origin request from: ${req.headers.host}`);
     return next();
   }
   
@@ -675,10 +664,6 @@ app.use((error, req, res, next) => {
       return res.status(413).json({ error: 'Too many files. Maximum is 1 file.' });
     }
     return res.status(400).json({ error: 'File upload error: ' + error.message });
-  }
-  
-  if (error.message.includes('Invalid file type')) {
-    return res.status(400).json({ error: error.message });
   }
   
   next(error);
