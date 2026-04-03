@@ -28,13 +28,15 @@ server {
         proxy_read_timeout 60s;
     }
 
-location /uploads/ {
-    proxy_pass http://localhost:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
+    location /uploads {
+        alias /root/freessenger/uploads;
+        expires 1m;
+        add_header Cache-Control "public, immutable";
+
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization';
+    }
     
     # Для WebSocket
     location /ws {

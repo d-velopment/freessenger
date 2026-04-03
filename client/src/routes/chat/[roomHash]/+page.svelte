@@ -571,16 +571,21 @@
     const file = event.target.files[0];
     if (!file) return;
 
+    console.log('[Client Debug] File selected:', file.name, 'Size:', file.size, 'MB:', file.size / 1024 / 1024);
+
     // Получаем кнопку и сохраняем оригинальное состояние заранее
     const uploadBtn = document.querySelector('.file-upload-btn');
     const originalContent = uploadBtn ? uploadBtn.innerHTML : '📎';
 
     try {
       // Проверяем размер файла
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File too large. Maximum size is 10MB.');
+      if (file.size > 50 * 1024 * 1024) {
+        console.log('[Client Debug] File too large:', file.size / 1024 / 1024, 'MB');
+        alert('File too large. Maximum size is 50MB.');
         return;
       }
+
+      console.log('[Client Debug] Starting upload...');
 
       // Показываем индикатор загрузки
       if (uploadBtn) {

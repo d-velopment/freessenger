@@ -10,10 +10,16 @@ const os = require('os');
 const multer = require('multer');
 const app = express();
 
+console.log("\n\n\n======== START =========", new Date());
+
+// Увеличиваем лимиты для Express (ДО multer)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 const PORT = process.env.PORT || 3000;
 const MAX_WS_CONNECTIONS_PER_IP = 10;
 const MAX_WS_MESSAGES_PER_SECOND = 5;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const FILE_CLEANUP_TIME = 60 * 1000; // 60 секунд
 
 // Создаем папку для загрузок
@@ -45,9 +51,17 @@ const upload = multer({
     files: 1 // Максимум 1 файл за раз
   },
   fileFilter: (req, file, cb) => {
+    console.log(`[Multer] File filter: ${file.originalname}, size: ${file.size}, type: ${file.mimetype}`);
     // Разрешаем все файлы
     cb(null, true);
   }
+});
+
+// Добавляем логирование для отладки загрузки
+app.use('/upload', (req, res, next) => {
+  console.log(`[Upload Debug] Headers:`, req.headers);
+  console.log(`[Upload Debug] Content-Length:`, req.headers['content-length']);
+  next();
 });
 
 // Функция для удаления файла через указанное время
@@ -658,7 +672,7 @@ app.use((error, req, res, next) => {
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: 'File too large. Maximum size is 10MB.' });
+      return res.status(413).json({ error: 'File too large. Maximum size is 50MB.' });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(413).json({ error: 'Too many files. Maximum is 1 file.' });
