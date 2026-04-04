@@ -11,19 +11,14 @@
   let messages = [];
   let newMessage = "";
   let participantCount = 0;
-  let messagesEndElement; // Reference to scroll anchor
   let textareaElement; // Reference to textarea element
-  let copySuccess = false;
   let myClientId = null;
   let typingUsers = new Set(); // Store typing user IDs
   let typingTimeout = null;
-  let typingIndicatorSent = false; // Track if we've sent startTyping
   let isRateLimited = false;
   let isEditing = false;
   let warningMessage = "⚠️ Slow down! Too many actions.";
-  let showFileUpload = false;
-  let uploadedFiles = [];
-
+  
   const roomHash = $page.params.roomHash;
 
   const namesStructure = {
@@ -297,9 +292,9 @@
   export const getNameMood = (clientId) => {
     if (!clientId) return "Unknown";
 
-    // Use clientId to generate consistent random names
-    const hash1 = parseInt(clientId.substring(0, 4), 36);
-    const hash2 = parseInt(clientId.substring(4, 8), 36);
+    // Use full clientId to generate consistent random names
+    const hash1 = Math.abs(parseInt(clientId.substring(0, 8), 36));
+    const hash2 = Math.abs(parseInt(clientId.substring(8, 16), 36));
 
     const moodIndex = hash1 % namesStructure.namesMoods.length;
     const animalIndex = hash2 % namesStructure.namesAnimals.length;
@@ -326,7 +321,7 @@
     if (!clientId) return "#f1f3f4";
 
     // Generate hue from clientId (0-360, but skip blue range 200-240)
-    const hash = parseInt(clientId.substring(0, 8), 36);
+    const hash = Math.abs(parseInt(clientId.substring(0, 8), 36));
     let hue = hash % 360;
 
     // Avoid blue hues (roughly 200-240 degrees)
@@ -485,19 +480,11 @@
       return false;
     }
 
-    // Проверяем на основные смайлики
-    const hasSimpleEmoji =
-      text.includes(":)") ||
-      text.includes(":(") ||
-      text.includes(":D") ||
-      text.includes(":P") ||
-      text.includes(":O");
-
     // Проверяем на Unicode эмодзи (простые диапазоны)
     const hasUnicodeEmoji =
       /[😀-🿿]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(text);
 
-    return hasSimpleEmoji || hasUnicodeEmoji;
+    return hasUnicodeEmoji;
   }
 
   // Функция для скролла к textarea
@@ -541,13 +528,13 @@
 
     try {
       // Проверяем размер файла
-      if (file.size > 50 * 1024 * 1024) {
+      if (file.size > 10 * 1024 * 1024) {
         console.log(
           "[Client Debug] File too large:",
           file.size / 1024 / 1024,
           "MB",
         );
-        alert("File too large. Maximum size is 50MB.");
+        alert("File too large. Maximum size is 10MB.");
         return;
       }
 
@@ -555,14 +542,29 @@
 
       // Показываем индикатор загрузки
       if (uploadBtn) {
-        uploadBtn.innerHTML = "⏳";
+        uploadBtn.innerHTML = "0%";
         uploadBtn.disabled = true;
       }
 
-      // Загружаем файл
+      // Загружаем файл с прогрессом
       const result = await fileUploadManager.uploadFile(file, (progress) => {
         console.log(`Upload progress: ${progress}%`);
+        if (uploadBtn) {
+          uploadBtn.innerHTML = `${progress}%`;
+        }
       });
+
+      // Восстанавливаем SVG иконку после загрузки
+      if (uploadBtn) {
+        uploadBtn.innerHTML = `
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        `;
+        uploadBtn.disabled = false;
+      }
 
       if (result.success) {
         // Отправляем сообщение с файлом в чат
@@ -621,7 +623,6 @@
     if (newMessage.trim()) {
       // Stop typing when sending message
       wsManager.stopTyping();
-      typingIndicatorSent = false;
       if (typingTimeout) {
         clearTimeout(typingTimeout);
         typingTimeout = null;
@@ -822,52 +823,94 @@
       </div>
     {/each}
 
-    {#each messages.reverse() as message (message.timestamp)}
-      <div
-        class="message"
-        class:own-message={message.isOwn}
-        class:other-message={!message.isOwn}
-        class:system-message={message.isSystem}
-        style:background-color={!message.isOwn
-          ? getColorFromClientId(message.clientId)
-          : undefined}
-        transition:fly={{ y: message.isOwn ? 20 : -20, duration: 300, delay: 125 }}
-      >
-        {#if !message.isSystem}
-          <div class="message-author">
-            <div class="author-initials">
-              {getInitials(message.clientId)}
+    {#if messages}
+      {@const reverseMessages = [...messages].reverse()}
+      {#each reverseMessages as message (message.timestamp)}
+        <div
+          class="message"
+          class:own-message={message.isOwn}
+          class:other-message={!message.isOwn}
+          class:system-message={message.isSystem}
+          style:background-color={!message.isOwn
+            ? getColorFromClientId(message.clientId)
+            : undefined}
+          transition:fly={{
+            y: message.isOwn ? 20 : -20,
+            duration: 300,
+            delay: 125,
+          }}
+        >
+          {#if !message.isSystem}
+            <div class="message-author">
+              <div class="author-initials">
+                {getInitials(message.clientId)}
+              </div>
+              <span class="author-full-name"
+                >{getNameMood(message.clientId)}</span
+              >
             </div>
-            <span class="author-full-name">{getNameMood(message.clientId)}</span
-            >
-          </div>
-        {/if}
-        <div class="message-body">
-          {#if message.type === "file"}
-            <div class="file-message">
-              <div class="file-container">
-                {#if message.fileType.startsWith("image/")}
-                  <!-- Изображение - только превью без деталей -->
-                  <img
-                    src={message.fileUrl}
-                    alt="Image"
-                    class="file-preview"
-                    on:click={() => openImageFullscreen(message.fileUrl)}
-                    title={message.fileName}
-                  />
-                {:else if message.fileType.startsWith("video/")}
-                  <!-- Видео - превью с preload="metadata" -->
-                  <div class="video-container">
-                    <video
+          {/if}
+          <div class="message-body">
+            {#if message.type === "file"}
+              <div class="file-message">
+                <div class="file-container">
+                  {#if message.fileType.startsWith("image/")}
+                    <img
                       src={message.fileUrl}
+                      alt="Image"
                       class="file-preview"
+                      on:click={() => openImageFullscreen(message.fileUrl)}
+                      title={message.fileName}
+                    />
+                  {:else if message.fileType.startsWith("video/")}
+                    <div class="video-container">
+                      <video
+                        src={message.fileUrl}
+                        class="file-preview"
+                        class:file-disabled={message.fileDisabled}
+                        preload="metadata"
+                        controls={!message.fileDisabled}
+                        title={message.fileDisabled
+                          ? "File has been deleted"
+                          : message.fileName}
+                      ></video>
+
+                      <div
+                        class="file-deletion-overlay"
+                        class:overlay-disabled={message.fileDisabled}
+                      >
+                        <img
+                          src="/assets/broken.png"
+                          alt="File has been deleted"
+                          class="broken-glass"
+                        />
+                      </div>
+                    </div>
+                  {:else}
+                    <!-- Другие файлы - иконка с деталями -->
+                    <div
+                      class="file-download"
                       class:file-disabled={message.fileDisabled}
-                      preload="metadata"
-                      controls={!message.fileDisabled}
+                      on:click={() =>
+                        !message.fileDisabled &&
+                        downloadFile(message.fileUrl, message.fileName)}
                       title={message.fileDisabled
                         ? "File has been deleted"
                         : message.fileName}
-                    />
+                    >
+                      <div class="file-icon">
+                        {getFileIcon(message.fileType)}
+                      </div>
+                      <div class="file-info">
+                        <span class="file-name"
+                          >{message.fileName ||
+                            message.fileUrl.split("/").pop()}</span
+                        >
+                        <span class="file-size"
+                          >{formatFileSize(message.fileSize)}</span
+                        >
+                      </div>
+                    </div>
 
                     <!-- Индикатор удаления файла -->
                     <div
@@ -880,61 +923,24 @@
                         class="broken-glass"
                       />
                     </div>
-                  </div>
-                {:else}
-                  <!-- Другие файлы - иконка с деталями -->
-                  <div
-                    class="file-download"
-                    class:file-disabled={message.fileDisabled}
-                    on:click={() =>
-                      !message.fileDisabled &&
-                      downloadFile(message.fileUrl, message.fileName)}
-                    title={message.fileDisabled
-                      ? "File has been deleted"
-                      : message.fileName}
-                  >
-                    <div class="file-icon">
-                      {getFileIcon(message.fileType)}
-                    </div>
-                    <div class="file-info">
-                      <span class="file-name"
-                        >{message.fileName ||
-                          message.fileUrl.split("/").pop()}</span
-                      >
-                      <span class="file-size"
-                        >{formatFileSize(message.fileSize)}</span
-                      >
-                    </div>
-                  </div>
-
-                  <!-- Индикатор удаления файла -->
-                  <div
-                    class="file-deletion-overlay"
-                    class:overlay-disabled={message.fileDisabled}
-                  >
-                    <img
-                      src="/assets/broken.png"
-                      alt="File has been deleted"
-                      class="broken-glass"
-                    />
-                  </div>
-                {/if}
+                  {/if}
+                </div>
               </div>
-            </div>
-          {:else}
-            <!-- Обычное текстовое сообщение -->
-            <span
-              class="message-content"
-              class:emoji-only={isEmojiOnly(message.message)}
-              >{message.message}</span
-            >
-          {/if}
-          {#if message.type !== "file"}
-            <span class="message-time">{formatTime(message.timestamp)}</span>
-          {/if}
+            {:else}
+              <!-- Обычное текстовое сообщение -->
+              <span
+                class="message-content"
+                class:emoji-only={isEmojiOnly(message.message)}
+                >{message.message}</span
+              >
+            {/if}
+            {#if message.type !== "file"}
+              <span class="message-time">{formatTime(message.timestamp)}</span>
+            {/if}
+          </div>
         </div>
-      </div>
-    {/each}
+      {/each}
+    {/if}
 
     {#if myClientId}
       <div class="client-name">
@@ -943,9 +949,6 @@
         )}
       </div>
     {/if}
-
-    <!-- Scroll anchor to ensure keyboard doesn't break scroll position -->
-    <div bind:this={messagesEndElement}></div>
   </div>
 
   {#if isRateLimited}
@@ -970,7 +973,11 @@
         title="Upload file"
         disabled={isRateLimited}
       >
-        📎
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
       </button>
       <textarea
         bind:value={newMessage}
@@ -1486,15 +1493,19 @@
   }
 
   .message-input .send-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     height: 100%;
     background: #007bff;
     color: white;
     border: none;
-    padding: 10px 16px;
+    padding: 0;
     border-radius: 20px;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-size: inherit;
+    font-size: 0.8em;
+    min-width: 4em;
   }
 
   .message-input .send-button:hover:not(:disabled) {

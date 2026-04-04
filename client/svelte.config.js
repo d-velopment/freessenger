@@ -13,6 +13,11 @@ const config = {
 		prerender: {
 			handleMissingId: 'warn'
 		}
+	},
+	compilerOptions: {
+		warningFilter: (warning) => {
+			return !warning.code.startsWith('a11y');
+		}
 	}
 };
 

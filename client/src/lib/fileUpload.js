@@ -3,7 +3,7 @@ import axios from 'axios';
 class FileUploadManager {
   constructor() {
     this.uploadUrl = '/upload';
-    this.maxFileSize = 50 * 1024 * 1024; // 50MB
+    this.maxFileSize = 10 * 1024 * 1024; // 10MB
     // Разрешаем все файлы
   }
 
@@ -12,7 +12,7 @@ class FileUploadManager {
     try {
       // Проверяем размер файла
       if (file.size > this.maxFileSize) {
-        throw new Error('File too large. Maximum size is 50MB.');
+        throw new Error('File too large. Maximum size is 10MB.');
       }
 
       // Создаем FormData

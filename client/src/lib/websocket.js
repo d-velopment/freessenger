@@ -5,6 +5,7 @@ class WebSocketManager {
     this.callbacks = {};
     this.onConnectedCallbacks = [];
     this.clientId = null; // Will be set by server
+    this.keepAliveInterval = null; // Интервал для keepAlive пингов
   }
 
   onConnected(callback) {
@@ -35,6 +36,14 @@ class WebSocketManager {
       
       if (this.roomHash) {
         this.joinRoom(this.roomHash);
+        
+        // Запускаем keepAlive пинг каждые 30 секунд
+        this.keepAliveInterval = setInterval(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.send({ type: 'keepAlive' });
+            console.log('Sent keepAlive ping');
+          }
+        }, 30000);
       }
     };
 
@@ -56,6 +65,13 @@ class WebSocketManager {
 
     this.ws.onclose = () => {
       console.log('Disconnected from WebSocket server');
+      
+      // Очищаем keepAlive интервал
+      if (this.keepAliveInterval) {
+        clearInterval(this.keepAliveInterval);
+        this.keepAliveInterval = null;
+      }
+      
       setTimeout(() => this.connect(), 3000); // Reconnect after 3 seconds
     };
 

@@ -37,8 +37,8 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    // Генерируем случайное имя файла через toString(36)
-    const randomName = Math.random().toString(36).substring(2, 18); // 16 символов
+    // Используем универсальную функцию generateHash для имен файлов
+    const randomName = generateHash(); // Keep dashes for consistency
     const ext = path.extname(file.originalname);
     cb(null, randomName + ext);
   }
@@ -325,14 +325,16 @@ const rooms = new Map();
 // Store typing users per room
 const typingUsers = new Map(); // roomHash -> Set of clientIds
 
-// Generate 64-character hash
+// Generate room hash using timestamp + UUID
 function generateHash() {
-  return crypto.randomBytes(32).toString('hex');
+  const timestamp = Date.now().toString(36);
+  const uuid = crypto.randomUUID(); // Keep dashes for consistency
+  return `${timestamp}-${uuid}`; // Combine timestamp with UUID
 }
 
-// Validate hash format (alphanumeric only)
+// Validate hash format (timestamp + UUID with dashes)
 function isValidHash(hash) {
-  return /^[a-f0-9]{64}$/i.test(hash);
+  return /^[a-z0-9]{8,36}-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(hash);
 }
 
 // Get room participant count
@@ -369,7 +371,7 @@ function broadcastStats() {
 
 wss.on('connection', (ws, req) => {
   let currentRoom = null;
-  const clientId = Math.random().toString(36).substr(2, 9); // Unique ID for this client
+  const clientId = generateHash(); // Use universal generateHash function
   const clientIp = req.socket.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
 
   // Send server clientId to client immediately
@@ -388,7 +390,7 @@ wss.on('connection', (ws, req) => {
   
   ws.on('message', (message) => {
     try {
-      console.log(`[WebSocket] Received raw message from ${clientId}:`, message.toString());
+      // console.log(`[WebSocket] Received raw message from ${clientId}:`, message.toString());
       
       // Check message rate limit
       const now = Date.now();
@@ -409,7 +411,7 @@ wss.on('connection', (ws, req) => {
       wsMessageTimestamps.set(clientId, recentMessages);
 
       const data = JSON.parse(message);
-      console.log(`[WebSocket] Parsed message from ${clientId}:`, data);
+      // console.log(`[WebSocket] Parsed message from ${clientId}:`, data);
 
       switch (data.type) {
         case 'get_stats':

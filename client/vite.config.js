@@ -24,5 +24,9 @@ export default defineConfig({
 				ws: true
 			}
 		}
+	},
+	// Игнорировать a11y ошибки для VS Code
+	define: {
+		__SVELTEKIT_DEV__: true
 	}
 });
