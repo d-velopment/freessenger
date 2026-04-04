@@ -4,7 +4,6 @@
   import { goto } from "$app/navigation";
   import { wsManager } from "$lib/websocket.js";
   import ThemeToggle from "$lib/ThemeToggle.svelte";
-  import FileUpload from "$lib/components/FileUpload.svelte";
   import { fileUploadManager } from "$lib/fileUpload.js";
   import { fly } from "svelte/transition";
 
