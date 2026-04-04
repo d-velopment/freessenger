@@ -570,7 +570,7 @@
         const messageData = {
           type: "file",
           fileUrl: result.file.url,
-          fileName: result.file.originalName,
+          fileName: file.name,
           fileSize: result.file.size,
           fileType: result.file.mimetype,
           timestamp: result.file.uploadTime,
@@ -593,7 +593,7 @@
         const fileMessage = {
           type: "file",
           fileUrl: result.file.url,
-          fileName: result.file.originalName,
+          fileName: file.name,
           fileSize: result.file.size,
           fileType: result.file.mimetype,
         };
