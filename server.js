@@ -12,7 +12,7 @@ const app = express();
 
 console.log("\n\n\n======== START =========", new Date());
 
-// Увеличиваем лимиты для Express (ДО multer)
+// Increase limits for Express (before multer)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -20,24 +20,24 @@ const PORT = process.env.PORT || 3000;
 const MAX_WS_CONNECTIONS_PER_IP = 10;
 const MAX_WS_MESSAGES_PER_SECOND = 5;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const FILE_CLEANUP_TIME = 60 * 1000; // 60 секунд
+const FILE_CLEANUP_TIME = 60 * 1000; // 60 seconds
 
-// Создаем папку для загрузок
+// Create uploads directory
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Хранилище загруженных файлов с таймерами
+// Storage for uploaded files with timers
 const uploadedFiles = new Map(); // filename -> { path, cleanupTimer }
 
-// Multer конфигурация для загрузки файлов
+// Multer configuration for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    // Используем универсальную функцию generateHash для имен файлов
+    // Use universal generateHash function for filenames
     const randomName = generateHash(); // Keep dashes for consistency
     const ext = path.extname(file.originalname);
     cb(null, randomName + ext);
@@ -48,23 +48,23 @@ const upload = multer({
   storage: storage,
   limits: {
     fileSize: MAX_FILE_SIZE,
-    files: 1 // Максимум 1 файл за раз
+    files: 1 // Maximum 1 file per request
   },
   fileFilter: (req, file, cb) => {
     console.log(`[Multer] File filter: ${file.originalname}, size: ${file.size}, type: ${file.mimetype}`);
-    // Разрешаем все файлы
+    // Allow all file types
     cb(null, true);
   }
 });
 
-// Добавляем логирование для отладки загрузки
+// Add logging for upload debugging
 app.use('/upload', (req, res, next) => {
   console.log(`[Upload Debug] Headers:`, req.headers);
   console.log(`[Upload Debug] Content-Length:`, req.headers['content-length']);
   next();
 });
 
-// Функция для удаления файла через указанное время
+// Function to delete file after specified time
 function scheduleFileDeletion(filename, filePath) {
   const cleanupTimer = setTimeout(() => {
     try {
@@ -77,20 +77,20 @@ function scheduleFileDeletion(filename, filePath) {
       console.error(`[FileCleanup] Error deleting file ${filename}:`, error);
     }
   }, FILE_CLEANUP_TIME);
-  
+
   return cleanupTimer;
 }
 
-// Функция для немедленного удаления файла
+// Function for immediate file deletion
 function deleteFile(filename) {
   const fileInfo = uploadedFiles.get(filename);
   if (fileInfo) {
-    // Отменяем таймер автоудаления
+    // Cancel auto-deletion timer
     if (fileInfo.cleanupTimer) {
       clearTimeout(fileInfo.cleanupTimer);
     }
-    
-    // Удаляем файл
+
+    // Delete file
     try {
       if (fs.existsSync(fileInfo.path)) {
         fs.unlinkSync(fileInfo.path);
@@ -99,7 +99,7 @@ function deleteFile(filename) {
     } catch (error) {
       console.error(`[FileCleanup] Error manually deleting file ${filename}:`, error);
     }
-    
+
     uploadedFiles.delete(filename);
   }
 }
@@ -113,19 +113,19 @@ function isOriginAllowed(origin) {
     'https://freessenger.com',
     'https://www.freessenger.com',
   ];
-  
-  // Дополнительно: проверяем host header для CloudFlare
+
+  // Additionally: check host header for CloudFlare
   if (!origin || origin === 'unknown') {
-    return true; // Разрешаем все без origin (CloudFlare может не отправлять origin)
+    return true; // Allow all without origin (CloudFlare may not send origin)
   }
-  
+
   return allowedOrigins.includes(origin);
 }
 
 // Sanitize message content to prevent XSS attacks
 function sanitizeMessage(message) {
   if (typeof message !== 'string') return '';
-  
+
   return message
     // Remove HTML tags
     .replace(/<script\b[^<]*(?:(?!<\/script>))*[^>]*>/gi, '')
@@ -151,19 +151,19 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS' || req.path === '/health' || isStaticResource || isUploadsPath) {
     return next();
   }
-  
+
   const origin = req.headers.origin || req.headers.referer || 'unknown';
-  
+
   // Allow all localhost/127.0.0.1 access without origin check
   if (!origin || origin === 'unknown') {
     return next();
   }
-  
+
   if (!isOriginAllowed(origin)) {
     console.log(`[Security] Blocked HTTP request from unauthorized origin: ${origin}, path: ${req.path}, host: ${req.headers.host}`);
     return res.status(403).json({ error: 'Unauthorized origin' });
   }
-  
+
   console.log(`[DEBUG] Origin allowed: ${origin}`);
   next();
 });
@@ -172,15 +172,15 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
-  
+
   if (!requestTimestamps.has(ip)) {
     requestTimestamps.set(ip, []);
   }
-  
+
   const timestamps = requestTimestamps.get(ip);
   // Remove timestamps older than 1 second
   const recentTimestamps = timestamps.filter(t => now - t < 1000);
-  
+
   if (recentTimestamps.length >= Math.max(MAX_WS_MESSAGES_PER_SECOND * 10, 20)) { // 20 is minimum for Svelte Kit
     console.log("[RateLimit] IP " + ip + " exceeded HTTP request rate limit", recentTimestamps.length);
     return res.status(429).json({ error: 'Too many requests' });
@@ -200,7 +200,7 @@ app.use(express.static(path.join(__dirname, 'client/dist'), {
 
 // Serve uploaded files
 app.use('/uploads', express.static(uploadsDir, {
-  maxAge: '1m', // Короткое время кеширования для загруженных файлов
+  maxAge: '1m', // Short cache time for uploaded files
   etag: true,
   lastModified: true
 }));
@@ -209,15 +209,15 @@ app.use('/uploads', express.static(uploadsDir, {
 app.get('/', (req, res) => {
   console.log(`[DEBUG] Serving index.html for: ${req.headers.host}`);
   console.log(`[DEBUG] Request headers:`, req.headers);
-  
+
   res.on('finish', () => {
     console.log(`[DEBUG] Response sent successfully for: ${req.headers.host}`);
   });
-  
+
   res.on('error', (error) => {
     console.log(`[DEBUG] Response error for: ${req.headers.host}`, error);
   });
-  
+
   res.sendFile(path.join(__dirname, 'client/dist', 'index.html'));
 });
 
@@ -227,45 +227,45 @@ app.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    
-    // Проверяем что файл действительно сохранен и имеет размер
+
+    // Check that file is actually saved and has size
     const fs = require('fs');
     const stats = fs.statSync(req.file.path);
     console.log(`[FileUpload] Saved file stats: ${req.file.filename}, size: ${stats.size} bytes, mimetype: ${req.file.mimetype}`);
-    
+
     if (stats.size === 0) {
       console.error(`[FileUpload] ERROR: File saved with 0 bytes: ${req.file.filename}`);
       return res.status(500).json({ error: 'File upload failed - 0 bytes saved' });
     }
-    
+
     const fileInfo = {
       filename: req.file.filename,
       originalName: req.file.originalname,
-      size: stats.size, // Используем реальный размер с диска
+      size: stats.size, // Use real size from disk
       mimetype: req.file.mimetype,
       path: req.file.path,
       url: `/uploads/${req.file.filename}`,
       uploadTime: Date.now(),
       willBeDeletedAt: Date.now() + FILE_CLEANUP_TIME
     };
-    
-    // Запланируем автоудаление файла
+
+    // Schedule auto-deletion of file
     const cleanupTimer = scheduleFileDeletion(req.file.filename, req.file.path);
-    
-    // Сохраним информацию о файле
+
+    // Save file information
     uploadedFiles.set(req.file.filename, {
       path: req.file.path,
       cleanupTimer: cleanupTimer,
       info: fileInfo
     });
-    
+
     console.log(`[FileUpload] Uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
-    
+
     res.json({
       success: true,
       file: fileInfo
     });
-    
+
   } catch (error) {
     console.error('[FileUpload] Error:', error);
     res.status(500).json({ error: 'File upload failed' });
@@ -276,7 +276,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
 app.delete('/upload/:filename', (req, res) => {
   const filename = req.params.filename;
   deleteFile(filename);
-  
+
   res.json({
     success: true,
     message: 'File deleted successfully'
@@ -287,11 +287,11 @@ app.delete('/upload/:filename', (req, res) => {
 app.get('/upload/:filename/info', (req, res) => {
   const filename = req.params.filename;
   const fileInfo = uploadedFiles.get(filename);
-  
+
   if (!fileInfo) {
     return res.status(404).json({ error: 'File not found' });
   }
-  
+
   res.json({
     success: true,
     file: fileInfo.info
@@ -387,31 +387,28 @@ wss.on('connection', (ws, req) => {
     return;
   }
   wsConnections.set(clientIp, connectionsFromIp + 1);
-  
+
   ws.on('message', (message) => {
     try {
-      // console.log(`[WebSocket] Received raw message from ${clientId}:`, message.toString());
-      
       // Check message rate limit
       const now = Date.now();
       if (!wsMessageTimestamps.has(clientId)) {
         wsMessageTimestamps.set(clientId, []);
       }
-      
+
       const timestamps = wsMessageTimestamps.get(clientId);
       const recentMessages = timestamps.filter(t => now - t < 1000);
-      
+
       if (recentMessages.length >= MAX_WS_MESSAGES_PER_SECOND) {
         console.log(`[RateLimit] Client ${clientId} exceeded message rate limit`);
         ws.send(JSON.stringify({ type: 'rate_limit_exceeded' }));
         return;
       }
-      
+
       recentMessages.push(now);
       wsMessageTimestamps.set(clientId, recentMessages);
 
       const data = JSON.parse(message);
-      // console.log(`[WebSocket] Parsed message from ${clientId}:`, data);
 
       switch (data.type) {
         case 'get_stats':
@@ -478,12 +475,12 @@ wss.on('connection', (ws, req) => {
           if (currentRoom && data.message && typeof data.message === 'string') {
             // Sanitize message to prevent XSS attacks
             const sanitizedMessage = sanitizeMessage(data.message);
-            
+
             // Log for debugging
             if (sanitizedMessage !== data.message) {
               console.log(`[Security] Message sanitized for client ${clientId}: "${data.message}" -> "${sanitizedMessage}"`);
             }
-            
+
             // Broadcast sanitized message to all participants in room except sender
             broadcastToRoom(currentRoom, {
               type: 'message',
@@ -552,7 +549,7 @@ wss.on('connection', (ws, req) => {
     } else {
       wsConnections.set(clientIp, connectionsFromIp - 1);
     }
-    
+
     // Clean up message timestamps
     wsMessageTimestamps.delete(clientId);
     console.log(`[WS] Disconnected from ${clientIp}`);
@@ -661,7 +658,7 @@ app.use((error, req, res, next) => {
   console.error('[ERROR] Express Error:', error);
   console.error('[ERROR] Request URL:', req.url);
   console.error('[ERROR] Request headers:', req.headers);
-  
+
   if (!res.headersSent) {
     res.status(500).json({
       error: 'Internal Server Error',
@@ -681,7 +678,7 @@ app.use((error, req, res, next) => {
     }
     return res.status(400).json({ error: 'File upload error: ' + error.message });
   }
-  
+
   next(error);
 });
 
@@ -701,19 +698,19 @@ function getLocalIP() {
 
 // SSL certificates for HTTPS/WSS (let's encrypt via certbot)
 let sslOptions = null;
-const USE_SSL = true; // Включаем SSL для работы через CloudFlare
+const USE_SSL = true; // Enable SSL for CloudFlare operation
 
 if (process.env.NODE_ENV === 'production' && USE_SSL) {
   try {
     const now = new Date();
     const timestamp = now.toISOString();
     const localTime = now.toLocaleString();
-    
+
     sslOptions = {
       key: fs.readFileSync('/etc/letsencrypt/live/freessenger.com/privkey.pem'),
       cert: fs.readFileSync('/etc/letsencrypt/live/freessenger.com/fullchain.pem')
     };
-    
+
     console.log('\n' + '='.repeat(50));
     console.log(`🔐 SSL CERTIFICATES LOADED`);
     console.log(`📅 Date: ${localTime}`);

@@ -4,22 +4,22 @@ class FileUploadManager {
   constructor() {
     this.uploadUrl = '/upload';
     this.maxFileSize = 10 * 1024 * 1024; // 10MB
-    // Разрешаем все файлы
+    // Allow all file types
   }
 
-  // Загрузка файла
+  // Upload file
   async uploadFile(file, onProgress = null) {
     try {
-      // Проверяем размер файла
+      // Check file size
       if (file.size > this.maxFileSize) {
         throw new Error('File too large. Maximum size is 10MB.');
       }
 
-      // Создаем FormData
+      // Create FormData
       const formData = new FormData();
       formData.append('file', file);
 
-      // Настраиваем axios для отслеживания прогресса
+      // Configure axios for progress tracking
       const config = {
         headers: {
           'Content-Type': 'multipart/form-data'
@@ -32,7 +32,7 @@ class FileUploadManager {
         }
       };
 
-      // Отправляем запрос
+      // Send request
       const response = await axios.post(this.uploadUrl, formData, config);
 
       if (response.data.success) {
@@ -47,19 +47,19 @@ class FileUploadManager {
     } catch (error) {
       console.error('File upload error:', error);
       
-      // Обработка ошибок
+      // Error handling
       if (error.response) {
-        // Ошибка от сервера
+        // Server error
         const message = error.response.data?.error || error.message;
         throw new Error(message);
       } else {
-        // Ошибка сети или другая
+        // Network error or other
         throw error;
       }
     }
   }
 
-  // Удаление файла
+  // Delete file
   async deleteFile(filename) {
     try {
       const response = await axios.delete(`${this.uploadUrl}/${filename}`);
@@ -75,7 +75,7 @@ class FileUploadManager {
     }
   }
 
-  // Получение информации о файле
+  // Get file information
   async getFileInfo(filename) {
     try {
       const response = await axios.get(`${this.uploadUrl}/${filename}/info`);
@@ -94,7 +94,7 @@ class FileUploadManager {
     }
   }
 
-  // Форматирование размера файла
+  // Format file size
   formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     
@@ -105,7 +105,7 @@ class FileUploadManager {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // Проверка типа файла (изображение или видео)
+  // Check file type (image or video)
   getFileType(mimetype) {
     if (mimetype.startsWith('image/')) {
       return 'image';
@@ -115,7 +115,7 @@ class FileUploadManager {
     return 'unknown';
   }
 
-  // Создание превью для изображения
+  // Create image preview
   createImagePreview(file) {
     return new Promise((resolve, reject) => {
       if (!file.type.startsWith('image/')) {
@@ -132,7 +132,7 @@ class FileUploadManager {
     });
   }
 
-  // Создание превью для видео
+  // Create video preview
   createVideoPreview(file) {
     return new Promise((resolve, reject) => {
       if (!file.type.startsWith('video/')) {
@@ -145,14 +145,14 @@ class FileUploadManager {
       const ctx = canvas.getContext('2d');
 
       video.onloadeddata = () => {
-        // Устанавливаем размеры canvas
+        // Set canvas dimensions
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        // Рисуем первый кадр
+        // Draw first frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Конвертируем в data URL
+        // Convert to data URL
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         resolve(dataUrl);
       };
@@ -162,7 +162,7 @@ class FileUploadManager {
     });
   }
 
-  // Создание превью (автоматически определяет тип)
+  // Create preview (auto-detect type)
   async createPreview(file) {
     try {
       if (file.type.startsWith('image/')) {
@@ -179,6 +179,6 @@ class FileUploadManager {
   }
 }
 
-// Экспорт экземпляра
+// Export instance
 export const fileUploadManager = new FileUploadManager();
 export default fileUploadManager;
