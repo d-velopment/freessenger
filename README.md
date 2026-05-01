@@ -6,8 +6,6 @@ Simple WebSocket messenger with hash-based rooms and complete privacy protection
 
 Freessenger is a private, anonymous chat application that allows users to create temporary chat rooms with unique hash codes. All messages are ephemeral and not stored on the server, ensuring complete privacy and anonymity.
 
-Live implementation: https://freessenger.com
-
 ## Features
 
 - Create temporary chat rooms with 64-character hash codes
